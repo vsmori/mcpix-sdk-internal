@@ -35,6 +35,7 @@ cargo test --workspace --features mcpix-receiver-sdk/sqlite
 cargo test -p mcpix-bank-receiver --features http-server,http-client
 cargo test -p mcpix-bank-receiver --features mtls
 cargo test -p mcpix-embed --features qr
+cargo test -p mcpix-embed --features qr,storage
 
 # bare-metal builds (validar no_std)
 cargo build -p mcpix-embed --no-default-features --features qr \
@@ -204,6 +205,22 @@ git commit -m "rotate release signing key"
   URI) e cobrem: round-trip OK; rejeição de cliente sem cert; rejeição
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
+
+**Sessão 11** (persistência embarcada de C₂ e contador T)
+- `mcpix-embed` ganha feature `storage` com `ReceiptStore` e
+  `CounterStore` sobre `embedded-storage::NorFlash`
+- Ping-pong de 2 slots por record type: anti-corrupção via CRC32, wear-leveling
+  básico, sobrevivência a queda de energia durante write
+- `RamFlash<N>` provida para testes/demo simulando NOR flash (write
+  apenas clear bits, erase volta a 0xFF) — pega bugs onde caller
+  esquece erase
+- Demo bare-metal estendida: generate → save → simula reboot → load →
+  validate → mark_consumed. Binário Cortex-M4F: 20,796 bytes (+4.2 KB
+  vs S9, ainda confortável)
+- 7 testes em `storage::tests` cobrindo: round-trip; empty; ping-pong
+  no segundo save; consumed sobrevive reboot; corrupção em 1 slot não
+  derruba o outro; counter store; coexistência de ambos em mesma flash
+- THREAT_MODEL §7.2 atualizado: gap reconhecido → coberto
 
 **Sessão 10** (documentação arquitetural para o depósito PCT)
 - `docs/` com 6 documentos principais (README, ARCHITECTURE, PROTOCOL,

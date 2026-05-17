@@ -75,6 +75,10 @@ rcgen = "0.14"
 heapless = "0.9"
 qrcodegen-no-heap = "1"
 
+# Persistência embarcada (S11) — abstração padrão de flash de microcontrolador.
+embedded-storage = "0.3"
+crc = { version = "3", default-features = false }
+
 [profile.release]
 lto = "fat"
 codegen-units = 1

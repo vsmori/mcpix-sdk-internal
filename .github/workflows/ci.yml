@@ -45,15 +45,18 @@ jobs:
       - name: cargo test (mcpix-embed + qr)
         run: cargo test -p mcpix-embed --features qr
 
+      - name: cargo test (mcpix-embed + qr + storage)
+        run: cargo test -p mcpix-embed --features qr,storage
+
       - name: install bare-metal targets
         run: |
           rustup target add thumbv7em-none-eabihf riscv32imc-unknown-none-elf
 
       - name: build mcpix-embed for Cortex-M4F (no_std, no alloc)
-        run: cargo build -p mcpix-embed --no-default-features --features qr --target thumbv7em-none-eabihf --release
+        run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target thumbv7em-none-eabihf --release
 
       - name: build mcpix-embed for RISC-V (ESP32-C3 class)
-        run: cargo build -p mcpix-embed --no-default-features --features qr --target riscv32imc-unknown-none-elf --release
+        run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target riscv32imc-unknown-none-elf --release
 
       - name: build embedded demo binary + measure size
         run: |

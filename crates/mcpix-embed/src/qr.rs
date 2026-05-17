@@ -74,7 +74,7 @@ mod tests {
         let qr = charge_qr(field, &mut tmp, &mut out).unwrap();
         // Sanity: módulos centrais existem; tamanho está dentro do esperado.
         let size = qr.size();
-        assert!(size >= 21 && size <= 33, "unexpected QR size {size}");
+        assert!((21..=33).contains(&size), "unexpected QR size {size}");
         // Pelo menos um módulo escuro e um claro — não é matriz vazia.
         let mut has_dark = false;
         let mut has_light = false;

@@ -21,6 +21,9 @@ default = []
 std = []
 # QR encoding via qrcodegen-no-heap (também no_std, mas é dep adicional).
 qr = ["dep:qrcodegen-no-heap"]
+# Persistência em flash via `embedded-storage`. Default off — caller traz
+# o backend (esp-storage, stm32-flash, etc.) e ativa esta feature.
+storage = ["dep:embedded-storage", "dep:crc"]
 
 [dependencies]
 hmac = { workspace = true, default-features = false }
@@ -29,6 +32,8 @@ subtle = { workspace = true, default-features = false }
 zeroize = { workspace = true, default-features = false, features = ["derive"] }
 heapless = { workspace = true }
 qrcodegen-no-heap = { workspace = true, optional = true }
+embedded-storage = { workspace = true, optional = true }
+crc = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Para o teste de validação cruzada contra `mcpix-core` (host-only).

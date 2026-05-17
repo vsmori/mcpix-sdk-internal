@@ -116,7 +116,12 @@ impl fmt::Debug for C1 {
 }
 
 /// Código de confirmação C₂ — material sensível, zeroizado.
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+///
+/// `PartialEq`/`Eq` são providos para conveniência em testes e em
+/// serialização/desserialização (CRC + record equality). **Para
+/// comparar com material apresentado em runtime, use `verify_c2()`
+/// — esta sim opera em tempo constante.**
+#[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct C2(pub(crate) [u8; C2_LEN]);
 
 impl C2 {

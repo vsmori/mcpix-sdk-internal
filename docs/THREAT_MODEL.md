@@ -207,11 +207,26 @@ para demo *não* fornece essa garantia (e está documentado).
 
 ### 7.2 Persistência de C₂ em microcontrolador
 
-**Limite conhecido.** Em `mcpix-embed` (S9), `c2_retained` vive na
-RAM. Reboot do MCU perde o retained antes da validação. Mitigação em
-produção: serializar para flash não-volátil (EEPROM emulada,
-LittleFS) entre `generate_charge` e `validate_receipt`. Não coberto
-nesta entrega.
+**Coberto em S11.** `mcpix-embed::storage` (feature `storage`)
+implementa `ReceiptStore` e `CounterStore` sobre a abstração
+`embedded-storage::NorFlash`. Estratégia ping-pong de 2 slots com
+CRC-32 garante:
+
+- **Atomicidade de cold-cut**: queda de energia durante o save
+  compromete apenas o slot novo; o anterior continua válido.
+- **Detecção de corrupção**: CRC32/ISO-HDLC sobre o record.
+- **Anti-rollback de contador**: `CounterStore` persiste `last_t`
+  antes da derivação do C₁, eliminando reuso de T entre boots.
+
+Cobertura: 7 testes em `crates/mcpix-embed/src/storage.rs::tests` +
+demo bare-metal estendido em `embedded/src/main.rs` que exercita
+save → simula reboot → load → valida → mark_consumed.
+
+Backends concretos para os SoCs alvo:
+- ESP32 family: [`esp-storage`](https://crates.io/crates/esp-storage)
+- STM32: `stm32xx-hal::flash`
+- nRF52/53: `nrf-hal::nvmc`
+- Testes: `RamFlash` provido pela própria crate.
 
 ## 8. Superfície dos códigos públicos
 
@@ -255,5 +270,5 @@ outro limite: cada `C₂` vale apenas dentro de seu quantum.
 | Impersonação de banco | coberto | — |
 | Cert revogado | **não coberto** | OCSP/CRL |
 | Vazamento de seed store | impl-dependente | integração Secure Element |
-| Persistência de retained em MCU | **gap reconhecido** | sessão futura |
+| Persistência de retained em MCU | coberto (S11) | — |
 | Ataque físico ao dispositivo | impl-dependente | Secure Element |

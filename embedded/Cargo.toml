@@ -15,7 +15,7 @@ test = false
 bench = false
 
 [dependencies]
-mcpix-embed = { path = "../crates/mcpix-embed", default-features = false, features = ["qr"] }
+mcpix-embed = { path = "../crates/mcpix-embed", default-features = false, features = ["qr", "storage"] }
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "1"
