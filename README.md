@@ -2,6 +2,10 @@
 
 SDK Rust de validação local de transações de pagamento. Pré-depósito PCT — uso interno.
 
+📚 **Documentação técnica completa**: ver [`docs/`](./docs/) — arquitetura,
+protocolo, modelo de ameaças, especificação criptográfica, mapeamento das
+reivindicações PCT, glossário e 10 ADRs.
+
 ## Estrutura
 
 ```
@@ -200,6 +204,22 @@ git commit -m "rotate release signing key"
   URI) e cobrem: round-trip OK; rejeição de cliente sem cert; rejeição
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
+
+**Sessão 10** (documentação arquitetural para o depósito PCT)
+- `docs/` com 6 documentos principais (README, ARCHITECTURE, PROTOCOL,
+  CRYPTO, THREAT_MODEL, PCT_CLAIMS_MAPPING, GLOSSARY) + 10 ADRs
+- Sequence diagrams em Mermaid embarcados nos `.md` (renderizam em
+  GitHub/GitLab sem ferramenta externa)
+- `PCT_CLAIMS_MAPPING.md` lista cada reivindicação técnica → linha
+  de código que a implementa → teste que a valida
+- `THREAT_MODEL.md` enumera 16 superfícies de ataque com status de
+  cobertura e próximos passos
+- `CRYPTO.md` formaliza derivação, codificação base32, encadeamento
+  C₁→C₂ e propriedades de segurança
+- 10 ADRs documentam decisões: HMAC com domain separation, alfabeto
+  restrito do SeedId, comparação em tempo constante, núcleo zero-I/O,
+  Ed25519 com pub key embarcada, separação FFI/UniFFI, modos duais de
+  T, identidade via SAN URI, subset no_std, política de não-pânico
 
 **Sessão 9** (port para microcontroladores — `no_std` sem alloc)
 - Nova crate `mcpix-embed`: `#![no_std]`, sem allocator, sem rede.
