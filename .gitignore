@@ -3,3 +3,13 @@
 .DS_Store
 .idea/
 .vscode/
+
+# Gradle
+bindings/kotlin/.gradle/
+bindings/kotlin/build/
+bindings/kotlin/.kotlin/
+bindings/kotlin/local.properties
+
+# Swift Package Manager local builds
+bindings/swift/.build/
+bindings/swift/MCPixSDKFFI.xcframework/
