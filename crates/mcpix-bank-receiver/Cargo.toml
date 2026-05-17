@@ -6,7 +6,23 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+default = []
+http-server = ["dep:axum", "dep:tokio", "dep:serde", "dep:serde_json", "dep:base64"]
+http-client = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:base64"]
+
 [dependencies]
 mcpix-core.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
+
+axum = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
+mcpix-bank-payer-mock = { workspace = true }

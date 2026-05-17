@@ -36,6 +36,9 @@ jobs:
       - name: cargo test (sqlite feature)
         run: cargo test -p mcpix-receiver-sdk --features sqlite
 
+      - name: cargo test (HTTP server + client features)
+        run: cargo test -p mcpix-bank-receiver --features http-server,http-client
+
       - name: integration test against built artifact (hash only)
         # Os dois primeiros tests do integrity_against_dist exigem só dist/
         # — não precisam de SHA256SUMS.sig nem chave privada.

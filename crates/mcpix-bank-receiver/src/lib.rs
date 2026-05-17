@@ -8,6 +8,15 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 
+#[cfg(feature = "http-server")]
+pub mod http_server;
+
+#[cfg(feature = "http-client")]
+pub mod http_client;
+
+#[cfg(any(feature = "http-server", feature = "http-client"))]
+mod wire;
+
 use std::collections::HashMap;
 
 use parking_lot::RwLock;

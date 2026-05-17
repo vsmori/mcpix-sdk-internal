@@ -25,9 +25,10 @@ xtask/                    cargo xtask gen-bindings | check-bindings
 ## Executar
 
 ```bash
-# testes Rust (default + sqlite + integração contra dist/ + propriedades)
+# testes Rust (default + sqlite + HTTP + integração contra dist/ + propriedades)
 cargo test --workspace
 cargo test --workspace --features mcpix-receiver-sdk/sqlite
+cargo test -p mcpix-bank-receiver --features http-server,http-client
 cargo test --workspace -- --include-ignored
 PROPTEST_CASES=10000 cargo test -p mcpix-core --test properties --release
 
@@ -159,6 +160,18 @@ git commit -m "rotate release signing key"
 - Demo `e2e_demo` estendido com PARTE B mostrando colisão dentro da janela,
   avanço de relógio e validação com tolerância
 - 11 testes novos cobrindo os caminhos de quantização e tolerância
+
+**Sessão 7** (HTTP transport + REST endpoints — bank-receiver real)
+- `mcpix-bank-receiver` ganha features `http-server` (axum) e
+  `http-client` (reqwest blocking) — opcionais, default permanece zero-rede
+- Endpoints REST: `POST /v1/seeds/{seed_id}`, `GET /v1/seeds/{seed_id}`,
+  `GET /v1/healthz`. JSON payload com material em base64. Header
+  `X-Institution-Id` como placeholder para mTLS futuro
+- `HttpBankReceiver` implementa o trait `BankReceiver` contra o servidor
+  — é injetável diretamente em `PayerBankMock`, mantendo o contrato sync
+- 3 integration tests em `tests/http_e2e.rs` que spawnam servidor real
+  em porta aleatória loopback e exercitam o protocolo completo via HTTP
+  (recebedor offline → REST → banco do pagador → recompõe C₂ → valida)
 
 ## Próximas sessões
 
