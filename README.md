@@ -29,6 +29,7 @@ xtask/                    cargo xtask gen-bindings | check-bindings
 cargo test --workspace
 cargo test --workspace --features mcpix-receiver-sdk/sqlite
 cargo test -p mcpix-bank-receiver --features http-server,http-client
+cargo test -p mcpix-bank-receiver --features mtls
 cargo test --workspace -- --include-ignored
 PROPTEST_CASES=10000 cargo test -p mcpix-core --test properties --release
 
@@ -172,6 +173,22 @@ git commit -m "rotate release signing key"
 - 3 integration tests em `tests/http_e2e.rs` que spawnam servidor real
   em porta aleatória loopback e exercitam o protocolo completo via HTTP
   (recebedor offline → REST → banco do pagador → recompõe C₂ → valida)
+
+**Sessão 8** (mTLS real — fim do header placeholder)
+- Nova feature `mtls` empilha sobre `http-server` + `http-client`,
+  substituindo `axum::serve` por `axum-server::from_tcp_rustls` com
+  `WebPkiClientVerifier` em modo obrigatório
+- `mtls::extract_institution_id` extrai a identidade da instituição do
+  SAN URI (`urn:mcpix:institution:<id>`) do cert do cliente, com
+  fallback para CN — substitui o header `X-Institution-Id` da S7
+- `MtlsClientMaterial` + `build_mtls_client` montam `reqwest::blocking`
+  com client cert PEM + CA do servidor; entrega-se diretamente como
+  argumento de `HttpBankReceiver::with_client`
+- 4 integration tests em `tests/mtls_e2e.rs` que geram PKI in-process
+  via `rcgen` (CA + cert servidor com SAN DNS+IP + cert cliente com SAN
+  URI) e cobrem: round-trip OK; rejeição de cliente sem cert; rejeição
+  de cliente assinado por CA não-confiada; extração de identidade do
+  cert DER
 
 ## Próximas sessões
 

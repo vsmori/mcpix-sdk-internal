@@ -14,6 +14,15 @@ pub mod http_server;
 #[cfg(feature = "http-client")]
 pub mod http_client;
 
+#[cfg(feature = "mtls")]
+pub mod mtls;
+
+#[cfg(feature = "mtls")]
+pub mod mtls_server;
+
+#[cfg(feature = "mtls")]
+pub mod mtls_client;
+
 #[cfg(any(feature = "http-server", feature = "http-client"))]
 mod wire;
 

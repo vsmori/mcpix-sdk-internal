@@ -10,6 +10,17 @@ publish.workspace = true
 default = []
 http-server = ["dep:axum", "dep:tokio", "dep:serde", "dep:serde_json", "dep:base64"]
 http-client = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:base64"]
+# mTLS empilha sobre http-server/http-client: substitui o listener TCP
+# do servidor por TLS termination com client cert verification, e a
+# `Identity` do cliente passa a vir do certificado em vez do header.
+mtls = [
+    "http-server",
+    "http-client",
+    "dep:axum-server",
+    "dep:rustls",
+    "dep:rustls-pemfile",
+    "dep:x509-parser",
+]
 
 [dependencies]
 mcpix-core.workspace = true
@@ -23,6 +34,12 @@ serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 
+axum-server = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+x509-parser = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
 mcpix-bank-payer-mock = { workspace = true }
+rcgen = { workspace = true }

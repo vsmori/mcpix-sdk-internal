@@ -39,6 +39,9 @@ jobs:
       - name: cargo test (HTTP server + client features)
         run: cargo test -p mcpix-bank-receiver --features http-server,http-client
 
+      - name: cargo test (mTLS feature)
+        run: cargo test -p mcpix-bank-receiver --features mtls
+
       - name: integration test against built artifact (hash only)
         # Os dois primeiros tests do integrity_against_dist exigem só dist/
         # — não precisam de SHA256SUMS.sig nem chave privada.
