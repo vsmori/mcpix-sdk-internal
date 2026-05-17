@@ -25,10 +25,16 @@ xtask/                    cargo xtask gen-bindings | check-bindings
 ## Executar
 
 ```bash
-# testes Rust (default + sqlite + integração contra dist/)
+# testes Rust (default + sqlite + integração contra dist/ + propriedades)
 cargo test --workspace
 cargo test --workspace --features mcpix-receiver-sdk/sqlite
 cargo test --workspace -- --include-ignored
+PROPTEST_CASES=10000 cargo test -p mcpix-core --test properties --release
+
+# fuzzing (precisa nightly + cargo-fuzz)
+cargo +nightly fuzz run fuzz_transport_parse -- -max_total_time=60
+cargo +nightly fuzz run fuzz_sums_line -- -max_total_time=60
+cargo +nightly fuzz run fuzz_verify_combined -- -max_total_time=60
 
 # demo CLI end-to-end
 cargo run -p mcpix-examples --bin e2e_demo
@@ -129,6 +135,17 @@ git commit -m "rotate release signing key"
 - `xtask gen-release-key` + `xtask sign-artifacts` + verificação combinada
   no runtime (assinatura + hash do manifest)
 - CI assina `SHA256SUMS` quando `MCPIX_SIGN_PRIVKEY_HEX` está presente
+
+**Sessão 5** (rigor cripto: property-based + fuzzing)
+- 14 propriedades em `tests/properties.rs` rodando 2k+ casos cada cobrem
+  determinismo, encadeamento C₁→C₂, distinção por seed/counter, codificação
+  alfanumérica, round-trip do campo de transporte, parsing robusto, equivalência
+  da comparação em tempo constante e ausência de forgery aleatório de assinatura
+- 3 fuzz targets em `fuzz/` via cargo-fuzz: `fuzz_transport_parse`,
+  `fuzz_sums_line`, `fuzz_verify_combined`. 25M+ execuções locais sem
+  encontrar panic ou forgery
+- `.github/workflows/fuzz.yml`: 1 min por target em PR, 30 min em schedule
+  semanal, com upload de crash artifacts em falha
 
 ## Próximas sessões
 

@@ -21,3 +21,4 @@ ed25519-dalek.workspace = true
 [dev-dependencies]
 rand_core.workspace = true
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
+proptest = { workspace = true }

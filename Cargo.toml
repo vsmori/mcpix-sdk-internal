@@ -12,6 +12,11 @@ members = [
     "xtask",
 ]
 
+# `fuzz/` é deliberadamente excluído: libfuzzer-sys depende de toolchain
+# nightly e flags de sanitização que poluem o resto da matriz de build.
+# Operadores rodam via `cargo +nightly fuzz run <target>` quando precisarem.
+exclude = ["fuzz"]
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
@@ -38,6 +43,7 @@ cbindgen = { version = "0.27", default-features = false }
 uniffi = { version = "0.28", features = ["cli"] }
 uniffi_build = { version = "0.28" }
 ed25519-dalek = { version = "2.1", default-features = false, features = ["std"] }
+proptest = "1.5"
 
 [profile.release]
 lto = "fat"
