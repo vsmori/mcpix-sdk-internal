@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 
+pub mod integrity_runtime;
 pub mod memory_store;
 pub mod monotonic_counter;
 pub mod system_random;

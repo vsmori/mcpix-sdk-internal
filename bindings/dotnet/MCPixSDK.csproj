@@ -1,0 +1,49 @@
+<!-- MCPix SDK — pacote NuGet wrapping the native cdylib via P/Invoke.
+     Native binaries (libmcpix_ffi.so / mcpix_ffi.dll) são produzidos por
+     `cargo xtask build-linux` / `build-windows` e ficam em ../dist/<plat>/.
+     `dotnet pack` empacota nas pastas `runtimes/<rid>/native/` conforme
+     convenção do NuGet para libs nativas multi-arquitetura. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0;netstandard2.1</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>MCPix.Sdk</RootNamespace>
+    <AssemblyName>MCPix.Sdk</AssemblyName>
+
+    <!-- NuGet metadata -->
+    <PackageId>MCPix.Sdk</PackageId>
+    <Version>$([System.Environment]::GetEnvironmentVariable('MCPIX_VERSION') ?? '0.1.0-alpha')</Version>
+    <Authors>MCPix</Authors>
+    <Description>Local validation of payment transactions — native SDK (P/Invoke)</Description>
+    <PackageLicenseExpression>Proprietary</PackageLicenseExpression>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+
+    <!-- Source layout -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src\McpixReceiver.cs" />
+  </ItemGroup>
+
+  <!-- Native runtime libs: empacotamos em runtimes/<rid>/native/ — convenção
+       que o nuget restore usa para escolher o binário certo por OS+arch. -->
+  <ItemGroup>
+    <None Include="..\..\dist\linux-x86_64\libmcpix_ffi.so"
+          Pack="true"
+          PackagePath="runtimes/linux-x64/native/libmcpix_ffi.so"
+          Condition="Exists('..\..\dist\linux-x86_64\libmcpix_ffi.so')" />
+    <None Include="..\..\dist\windows-x86_64\mcpix_ffi.dll"
+          Pack="true"
+          PackagePath="runtimes/win-x64/native/mcpix_ffi.dll"
+          Condition="Exists('..\..\dist\windows-x86_64\mcpix_ffi.dll')" />
+    <!-- Header C também viaja para integradores que preferem editar P/Invoke
+         manualmente em vez de consumir o wrapper. -->
+    <None Include="..\c\include\mcpix.h"
+          Pack="true"
+          PackagePath="include/mcpix.h"
+          Condition="Exists('..\c\include\mcpix.h')" />
+  </ItemGroup>
+</Project>

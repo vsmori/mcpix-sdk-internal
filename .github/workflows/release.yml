@@ -1,0 +1,175 @@
+# Release: build cross-platform, empacotamento, SHA256SUMS, publicação.
+# Dispara em push de tag `v*` ou via workflow_dispatch.
+#
+# Matriz:
+#   - ubuntu-latest: Linux .so, Windows .dll (cross via mingw), Android (4 ABIs via cargo-ndk)
+#   - macos-latest: iOS XCFramework (device + simulator universal)
+#
+# Os jobs depositam artefatos em dist/, baixados pelo job `publish` que
+# computa SHA256SUMS, produz GitHub Release e (opcionalmente) publica em
+# Maven e NuGet quando os secrets correspondentes estiverem disponíveis.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (default: tag without leading v)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-windows:
+    name: linux + windows (cross via mingw)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
+
+      - name: install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build linux
+        run: cargo xtask build-linux
+
+      - name: build windows
+        run: cargo xtask build-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-windows
+          path: dist/
+
+  android:
+    name: android (4 ABIs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/
+
+  ios:
+    name: ios (XCFramework)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build ios + xcframework
+        run: |
+          cargo xtask build-ios
+          cargo xtask package-xcframework
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-ios
+          path: dist/
+
+  package:
+    name: package + sign + release
+    needs: [linux-windows, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist-staged }
+
+      - name: merge artifacts
+        run: |
+          mkdir -p dist
+          cp -r dist-staged/dist-linux-windows/* dist/ 2>/dev/null || true
+          cp -r dist-staged/dist-android/* dist/ 2>/dev/null || true
+          cp -r dist-staged/dist-ios/* dist/ 2>/dev/null || true
+          ls -la dist/
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: hash artifacts
+        run: cargo xtask hash-artifacts
+
+      # ── AAR ─────────────────────────────────────────────────────────────
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+        with: { cmdline-tools-version: 11076708 }
+      - uses: gradle/actions/setup-gradle@v3
+      - name: package aar
+        run: cargo xtask package-aar
+
+      # ── NuGet ───────────────────────────────────────────────────────────
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: package nuget
+        run: cargo xtask package-nuget
+
+      - name: hash final artifacts
+        run: cargo xtask hash-artifacts
+
+      # ── GitHub Release ──────────────────────────────────────────────────
+      - name: github release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SHA256SUMS
+            dist/**/*.so
+            dist/**/*.dll
+            dist/**/*.aar
+            dist/**/*.nupkg
+            dist/ios/MCPixSDKFFI.xcframework/**
+
+      # ── Publicação em registries (skip se secrets ausentes) ─────────────
+      - name: publish to Maven registry
+        if: env.MAVEN_URL != ''
+        env:
+          MAVEN_URL: ${{ secrets.MAVEN_URL }}
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+        working-directory: bindings/kotlin/aar
+        run: gradle publish -Pmaven.url="$MAVEN_URL" -Pmaven.user="$MAVEN_USER" -Pmaven.pass="$MAVEN_PASS"
+
+      - name: publish to NuGet feed
+        if: env.NUGET_URL != ''
+        env:
+          NUGET_URL: ${{ secrets.NUGET_URL }}
+          NUGET_KEY: ${{ secrets.NUGET_KEY }}
+        run: |
+          dotnet nuget push 'dist/nuget/*.nupkg' \
+            --source "$NUGET_URL" --api-key "$NUGET_KEY" --skip-duplicate

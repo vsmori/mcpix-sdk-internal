@@ -13,3 +13,14 @@ bindings/kotlin/local.properties
 # Swift Package Manager local builds
 bindings/swift/.build/
 bindings/swift/MCPixSDKFFI.xcframework/
+
+# Release artifacts — produzidos por `cargo xtask build-*`
+dist/
+
+# .NET
+bindings/dotnet/bin/
+bindings/dotnet/obj/
+
+# Android AAR build outputs
+bindings/kotlin/aar/.gradle/
+bindings/kotlin/aar/build/

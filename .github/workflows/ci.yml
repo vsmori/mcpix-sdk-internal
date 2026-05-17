@@ -1,0 +1,60 @@
+# CI: validação a cada push/PR.
+# Linux only — testes Rust completos + smoke test Kotlin JVM + check-bindings.
+# Cross-compile e empacotamento estão em release.yml (mais caros).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Rust tests + bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+
+      - name: cargo test (default)
+        run: cargo test --workspace
+
+      - name: cargo test (sqlite feature)
+        run: cargo test -p mcpix-receiver-sdk --features sqlite
+
+      - name: check bindings drift
+        run: cargo xtask check-bindings
+
+  kotlin-smoke:
+    name: Kotlin JVM smoke test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: build cdylib
+        run: cargo build -p mcpix-uniffi
+
+      - name: gradle test
+        working-directory: bindings/kotlin
+        run: gradle test --no-daemon
