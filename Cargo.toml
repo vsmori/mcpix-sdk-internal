@@ -8,6 +8,7 @@ members = [
     "crates/mcpix-ffi",
     "crates/mcpix-uniffi",
     "crates/mcpix-embed",
+    "crates/mcpix-backup",
     "crates/uniffi-bindgen",
     "examples",
     "xtask",
@@ -78,6 +79,11 @@ qrcodegen-no-heap = "1"
 # Persistência embarcada (S11) — abstração padrão de flash de microcontrolador.
 embedded-storage = "0.3"
 crc = { version = "3", default-features = false }
+
+# Backup/restore de sementes (S12) — KDF resistente a brute-force + AEAD moderno.
+argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+bs58 = { version = "0.5", default-features = false, features = ["alloc", "check"] }
 
 [profile.release]
 lto = "fat"

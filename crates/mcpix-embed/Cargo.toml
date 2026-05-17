@@ -24,6 +24,11 @@ qr = ["dep:qrcodegen-no-heap"]
 # Persistência em flash via `embedded-storage`. Default off — caller traz
 # o backend (esp-storage, stm32-flash, etc.) e ativa esta feature.
 storage = ["dep:embedded-storage", "dep:crc"]
+# Restore do backup criptografado (Argon2id + ChaCha20-Poly1305). Implementação
+# paralela à `mcpix-backup` (host) — mesmo wire format, parsing sobre heapless.
+# Requer alloc para argon2/chacha20poly1305/bs58 — caller fornece um global
+# allocator (linked_list_allocator no Cortex-M, esp-alloc no ESP32).
+restore = ["dep:argon2", "dep:chacha20poly1305", "dep:bs58"]
 
 [dependencies]
 hmac = { workspace = true, default-features = false }
@@ -34,7 +39,11 @@ heapless = { workspace = true }
 qrcodegen-no-heap = { workspace = true, optional = true }
 embedded-storage = { workspace = true, optional = true }
 crc = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
+bs58 = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Para o teste de validação cruzada contra `mcpix-core` (host-only).
 mcpix-core = { workspace = true }
+mcpix-backup = { path = "../mcpix-backup" }

@@ -41,6 +41,9 @@ pub mod qr;
 #[cfg(feature = "storage")]
 pub mod storage;
 
+#[cfg(feature = "restore")]
+pub mod restore;
+
 pub use crypto::{derive_c2_from_c1, derive_pair, verify_c2};
 pub use transport_field::{encode_into, parse_into, PROTOCOL_PREFIX, TRANSPORT_FIELD_LEN};
 pub use types::{C1, C2, Seed, SeedId, C1_LEN, C2_LEN, SEED_ID_MAX_LEN, SEED_LEN};

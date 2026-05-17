@@ -48,6 +48,12 @@ jobs:
       - name: cargo test (mcpix-embed + qr + storage)
         run: cargo test -p mcpix-embed --features qr,storage
 
+      - name: cargo test (mcpix-backup)
+        run: cargo test -p mcpix-backup
+
+      - name: cargo test (backup host↔embed cross-validation)
+        run: cargo test -p mcpix-embed --features restore --test backup_cross_validate
+
       - name: install bare-metal targets
         run: |
           rustup target add thumbv7em-none-eabihf riscv32imc-unknown-none-elf

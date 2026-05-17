@@ -206,6 +206,22 @@ git commit -m "rotate release signing key"
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
 
+**Sessão 12** (backup/restore criptografado de sementes)
+- Nova crate `mcpix-backup` (host): export/import de `Seed + SeedId +
+  counter_mode + counter_t` cifrado com Argon2id + ChaCha20-Poly1305,
+  serializado em Base58Check (single line, alfanumérico, anti-typo)
+- Container 122 bytes (header AAD 47 + ciphertext 59 + tag 16) → ~167
+  chars Base58Check. Cabe em uma linha impressa ou QR code
+- Header autenticado como AAD da AEAD: tampering nos parâmetros KDF
+  (ex. reduzir m_cost) quebra a tag
+- `mcpix-embed` ganha feature `restore` com import paralelo no_std
+  (paridade bit-exata do wire format via cross-validation)
+- 14 testes novos: 11 unit em `mcpix-backup` + 3 cross-validate
+  host↔embed
+- Defesas: wrong passphrase ⇒ `DecryptFailed`; 1-bit tampering quebra
+  AEAD; salts/nonces independentes evitam que outputs idênticos vazem
+  o mesmo input
+
 **Sessão 11** (persistência embarcada de C₂ e contador T)
 - `mcpix-embed` ganha feature `storage` com `ReceiptStore` e
   `CounterStore` sobre `embedded-storage::NorFlash`
