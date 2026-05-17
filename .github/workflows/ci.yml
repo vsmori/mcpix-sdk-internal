@@ -42,6 +42,25 @@ jobs:
       - name: cargo test (mTLS feature)
         run: cargo test -p mcpix-bank-receiver --features mtls
 
+      - name: cargo test (mcpix-embed + qr)
+        run: cargo test -p mcpix-embed --features qr
+
+      - name: install bare-metal targets
+        run: |
+          rustup target add thumbv7em-none-eabihf riscv32imc-unknown-none-elf
+
+      - name: build mcpix-embed for Cortex-M4F (no_std, no alloc)
+        run: cargo build -p mcpix-embed --no-default-features --features qr --target thumbv7em-none-eabihf --release
+
+      - name: build mcpix-embed for RISC-V (ESP32-C3 class)
+        run: cargo build -p mcpix-embed --no-default-features --features qr --target riscv32imc-unknown-none-elf --release
+
+      - name: build embedded demo binary + measure size
+        run: |
+          sudo apt-get install -y binutils-arm-none-eabi
+          cd embedded && cargo build --release
+          arm-none-eabi-size target/thumbv7em-none-eabihf/release/mcpix-embed-demo
+
       - name: integration test against built artifact (hash only)
         # Os dois primeiros tests do integrity_against_dist exigem só dist/
         # — não precisam de SHA256SUMS.sig nem chave privada.

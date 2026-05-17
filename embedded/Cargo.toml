@@ -1,0 +1,29 @@
+[package]
+name = "mcpix-embed-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Projeto bare-metal isolado do workspace principal — usa toolchain
+# Cortex-M com cortex-m-rt + linker script próprio. Build:
+#   cd embedded && cargo build --release --target thumbv7em-none-eabihf
+
+[[bin]]
+name = "mcpix-embed-demo"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+mcpix-embed = { path = "../crates/mcpix-embed", default-features = false, features = ["qr"] }
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1"
+
+[profile.release]
+opt-level = "z"   # Otimizar para tamanho — métrica que importa em MCU.
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = true
+panic = "abort"

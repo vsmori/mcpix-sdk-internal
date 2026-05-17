@@ -10,10 +10,12 @@ publish.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
-hmac.workspace = true
-sha2.workspace = true
-subtle.workspace = true
-zeroize.workspace = true
+# `std` features explícitas: workspace dep agora vem com defaults-off para
+# permitir cross-compile do `mcpix-embed`. Aqui no host queremos std.
+hmac = { workspace = true, features = ["std"] }
+sha2 = { workspace = true, features = ["std"] }
+subtle = { workspace = true, features = ["std"] }
+zeroize = { workspace = true, features = ["alloc"] }
 thiserror.workspace = true
 data-encoding.workspace = true
 ed25519-dalek.workspace = true

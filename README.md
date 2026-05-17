@@ -30,6 +30,17 @@ cargo test --workspace
 cargo test --workspace --features mcpix-receiver-sdk/sqlite
 cargo test -p mcpix-bank-receiver --features http-server,http-client
 cargo test -p mcpix-bank-receiver --features mtls
+cargo test -p mcpix-embed --features qr
+
+# bare-metal builds (validar no_std)
+cargo build -p mcpix-embed --no-default-features --features qr \
+  --target thumbv7em-none-eabihf --release
+cargo build -p mcpix-embed --no-default-features --features qr \
+  --target riscv32imc-unknown-none-elf --release
+
+# binário Cortex-M4F completo (demo no embedded/)
+(cd embedded && cargo build --release)
+arm-none-eabi-size embedded/target/thumbv7em-none-eabihf/release/mcpix-embed-demo
 cargo test --workspace -- --include-ignored
 PROPTEST_CASES=10000 cargo test -p mcpix-core --test properties --release
 
@@ -189,6 +200,25 @@ git commit -m "rotate release signing key"
   URI) e cobrem: round-trip OK; rejeição de cliente sem cert; rejeição
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
+
+**Sessão 9** (port para microcontroladores — `no_std` sem alloc)
+- Nova crate `mcpix-embed`: `#![no_std]`, sem allocator, sem rede.
+  Subset receiver-only que cabe em ESP8266 / ESP32-C3 / Cortex-M4.
+- API mínima: `derive_pair(&seed, counter) -> (C1, C2)`,
+  `encode_into(&sid, &c1, &mut [u8; 35]) -> &str`,
+  `charge_qr(field, &mut tmp, &mut out) -> QrCode<'_>` (feature `qr`).
+- Cross-validação em `tests/cross_validate.rs` confirma byte-a-byte
+  igualdade com `mcpix-core` para conjunto amostral — algoritmo idêntico
+  no host e no firmware.
+- `embedded/`: projeto bare-metal `cortex-m-rt` (excluído do workspace
+  principal) com `panic-halt`. Build local validado:
+  - `thumbv7em-none-eabihf` (Cortex-M4F) ✓
+  - `riscv32imc-unknown-none-elf` (ESP32-C3) ✓
+  - Binário demo completo (derive_pair + encode + QR + iteração): 16.5 KB
+    `.text`, 0 RAM estática, 0 BSS.
+- 7 testes (4 unit + 3 cross-validation contra `mcpix-core`).
+- Para ESP8266 Xtensa: SDK porta tal qual; ponto crítico é a toolchain
+  (fork Espressif via `espup install`).
 
 ## Próximas sessões
 
