@@ -1,0 +1,12 @@
+[package]
+name = "mcpix-bank-receiver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mcpix-core.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true

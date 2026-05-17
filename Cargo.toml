@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mcpix-core",
+    "crates/mcpix-receiver-sdk",
+    "crates/mcpix-bank-receiver",
+    "crates/mcpix-bank-payer-mock",
+    "crates/mcpix-ffi",
+    "examples",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Proprietary"
+publish = false
+
+[workspace.dependencies]
+mcpix-core = { path = "crates/mcpix-core" }
+mcpix-receiver-sdk = { path = "crates/mcpix-receiver-sdk" }
+mcpix-bank-receiver = { path = "crates/mcpix-bank-receiver" }
+mcpix-bank-payer-mock = { path = "crates/mcpix-bank-payer-mock" }
+
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2.5"
+zeroize = { version = "1.7", features = ["derive"] }
+thiserror = "1"
+rand_core = { version = "0.6", features = ["std", "getrandom"] }
+parking_lot = "0.12"
+rusqlite = { version = "0.31", features = ["bundled"] }
+data-encoding = "2.5"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 0

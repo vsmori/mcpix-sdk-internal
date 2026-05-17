@@ -1,0 +1,21 @@
+[package]
+name = "mcpix-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Camada FFI: gera biblioteca dinâmica e estática para empacotamento em
+# XCFramework (iOS), AAR (Android) e DLL/SO (.NET via P/Invoke).
+[lib]
+name = "mcpix_ffi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+mcpix-core.workspace = true
+mcpix-receiver-sdk.workspace = true
+mcpix-bank-receiver.workspace = true
+mcpix-bank-payer-mock.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true

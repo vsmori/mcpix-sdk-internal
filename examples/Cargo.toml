@@ -1,0 +1,15 @@
+[package]
+name = "mcpix-examples"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "e2e_demo"
+path = "e2e_demo.rs"
+
+[dependencies]
+mcpix-core = { path = "../crates/mcpix-core" }
+mcpix-receiver-sdk = { path = "../crates/mcpix-receiver-sdk" }
+mcpix-bank-receiver = { path = "../crates/mcpix-bank-receiver" }
+mcpix-bank-payer-mock = { path = "../crates/mcpix-bank-payer-mock" }
