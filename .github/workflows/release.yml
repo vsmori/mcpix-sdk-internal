@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # SLSA L3 — OIDC para keyless signing via Sigstore.
+  actions: read     # SLSA L3 — leitura de metadados de workflow.
 
 env:
   CARGO_TERM_COLOR: always
@@ -106,6 +108,10 @@ jobs:
     name: package + sign + release
     needs: [linux-windows, android, ios]
     runs-on: ubuntu-latest
+    # Exporta o digest dos artefatos para o job `provenance` (SLSA L3).
+    # Saída em base64 (formato esperado pelo slsa-github-generator).
+    outputs:
+      artifacts-base64-subjects: ${{ steps.subjects.outputs.subjects }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -154,6 +160,27 @@ jobs:
           MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
         run: cargo xtask sign-artifacts
 
+      # ── SLSA L3: extrai (path, sha256) de cada artefato e codifica em      ─
+      # base64. Esse formato é o "subjects" da spec in-toto; o reusable        ─
+      # workflow `generator_generic_slsa3.yml` o consome literalmente e        ─
+      # assina via Sigstore (Fulcio cert + Rekor inclusion proof) usando o     ─
+      # OIDC token efêmero do runner — não há chave privada longa.             ─
+      - name: prepare SLSA subjects
+        id: subjects
+        run: |
+          # Lista de artefatos a serem attestados. Mantemos SHA256SUMS de
+          # fora porque ele já enumera os hashes em si; provar provenance
+          # de cada binário individualmente é o que o consumidor verifica.
+          (
+            cd dist
+            find . -type f \
+              \( -name "*.so" -o -name "*.dll" -o -name "*.aar" \
+                 -o -name "*.nupkg" -o -path "*MCPixSDKFFI.xcframework*" \) \
+              -print0 | xargs -0 sha256sum
+          ) > /tmp/subjects.txt
+          # base64 sem quebras de linha (formato esperado pelo generator).
+          echo "subjects=$(base64 -w0 < /tmp/subjects.txt)" >> "$GITHUB_OUTPUT"
+
       # ── GitHub Release ──────────────────────────────────────────────────
       - name: github release
         if: startsWith(github.ref, 'refs/tags/')
@@ -186,3 +213,39 @@ jobs:
         run: |
           dotnet nuget push 'dist/nuget/*.nupkg' \
             --source "$NUGET_URL" --api-key "$NUGET_KEY" --skip-duplicate
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # SLSA L3 provenance
+  # ──────────────────────────────────────────────────────────────────────────
+  # Reusable workflow oficial do projeto SLSA. Roda em runner *separado* do
+  # build, isolando o passo de assinatura (requisito L3 de "build isolation
+  # between provenance generation and the build itself").
+  #
+  # Gera arquivo `<artifact>.intoto.jsonl` contendo:
+  #   • predicate `slsa-provenance` v1 (https://slsa.dev/provenance/v1)
+  #     com: builder.id (deste workflow), buildType (generic), invocation
+  #     (ref/commit/parameters), materials (source repo + commit SHA),
+  #     metadata (timestamps reproduzíveis pelo runner)
+  #   • assinatura keyless via Sigstore Fulcio (cert efêmero ligado ao
+  #     OIDC token do GitHub Actions — claim subject contém workflow path,
+  #     ref, repository, actor)
+  #   • inclusion proof em Rekor (transparency log público)
+  #
+  # Por que isso fecha §5.3 (Comprometimento do CI):
+  #   • Atacante que controle um runner não consegue forjar OIDC token do
+  #     GitHub IdP — teria que comprometer o próprio GitHub.
+  #   • Alterações no workflow path ou no branch viram diff visível no
+  #     Rekor — `slsa-verifier` rejeita se o repositório/ref não bater.
+  #   • Provenance vincula bit-exato o artefato baixado ao commit que o
+  #     produziu (consumer verifica antes de carregar o .so).
+  provenance:
+    needs: [package]
+    permissions:
+      id-token: write   # OIDC para Sigstore (sem secrets persistentes).
+      contents: write   # Anexa o .intoto.jsonl ao GitHub Release.
+      actions: read     # Leitura de metadata do workflow para o predicate.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.package.outputs.artifacts-base64-subjects }}
+      provenance-name: mcpix-sdk.intoto.jsonl
+      upload-assets: ${{ startsWith(github.ref, 'refs/tags/') }}

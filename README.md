@@ -206,6 +206,20 @@ git commit -m "rotate release signing key"
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
 
+**Sessão 13** (SLSA L3 supply-chain provenance)
+- `release.yml` ganha job `provenance` que invoca o reusable workflow
+  oficial `slsa-framework/slsa-github-generator` em runner separado
+- Emite `mcpix-sdk.intoto.jsonl` com predicate `slsa-provenance` v1,
+  assinatura keyless via Sigstore Fulcio (cert efêmero ligado ao OIDC
+  do GitHub Actions) e inclusion proof em Rekor transparency log
+- Consumer verifica com `slsa-verifier verify-artifact ...` antes de
+  carregar — vincula bit-exato o `.so/.dll/.aar` ao commit fonte
+- Novo `docs/SLSA.md` documenta verificação manual e em CI
+- Novo `scripts/verify-release.sh` automatiza verificação em lote de
+  todos os artefatos da release
+- Fecha §5.3 do THREAT_MODEL (Comprometimento do CI) — atacante teria
+  que comprometer o GitHub IdP para forjar OIDC, não basta runner
+
 **Sessão 12** (backup/restore criptografado de sementes)
 - Nova crate `mcpix-backup` (host): export/import de `Seed + SeedId +
   counter_mode + counter_t` cifrado com Argon2id + ChaCha20-Poly1305,

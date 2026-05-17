@@ -142,9 +142,33 @@ byte e confirma `Tampered`.
 a build para inserir backdoor mas mantém a assinatura válida (porque
 controla o secret).
 
-**Defesa.** *Parcial.* SLSA L3 (próximas sessões) com build
-provenance via sigstore + transparency log endereçam isso.
-Atualmente: rotação manual de chave + revisão de PR.
+**Defesa.** *Endereçada via SLSA L3.* O job `provenance` em
+`release.yml` invoca o reusable workflow oficial
+`slsa-framework/slsa-github-generator` para emitir
+`mcpix-sdk.intoto.jsonl` em runner separado do build, com:
+
+- **Assinatura keyless** via Sigstore Fulcio — cert X.509 efêmero
+  ligado ao OIDC token do GitHub Actions; não há chave persistente.
+- **Transparency log** Rekor — toda emissão fica visível publicamente;
+  manipulações posteriores requerem comprometer o log.
+- **Predicate slsa-provenance v1** ligando o digest do artefato ao
+  commit fonte, workflow path, ref e materials.
+
+Consumidor verifica antes de carregar o `.so`:
+
+```bash
+slsa-verifier verify-artifact \
+  --provenance-path mcpix-sdk.intoto.jsonl \
+  --source-uri github.com/vsmori/mcpix-sdk-internal \
+  --source-tag v1.0.0 \
+  ./libmcpix_ffi.so
+```
+
+Detalhes operacionais e script `scripts/verify-release.sh` em
+[`SLSA.md`](SLSA.md). Atacante que comprometa um runner não consegue
+forjar o OIDC token sem comprometer o próprio GitHub IdP — atendendo
+ao requisito SLSA L3 de "provenance não-falsificável". *Resíduo:* L4
+(build hermético reproduzível) fica como roadmap.
 
 ### 5.4 Hijacking de dependência (LD_PRELOAD, DLL search order)
 
@@ -264,7 +288,7 @@ outro limite: cada `C₂` vale apenas dentro de seu quantum.
 | Rollback de clock | coberto | — |
 | Substituição de binário | coberto | — |
 | Patch in-place | coberto | — |
-| Comprometimento de CI | **parcial** | SLSA L3 |
+| Comprometimento de CI | coberto (SLSA L3) | L4 hermético |
 | LD_PRELOAD / DLL hijack | **não coberto** | remote attestation |
 | Eavesdropping inter-bancos | coberto | — |
 | Impersonação de banco | coberto | — |
