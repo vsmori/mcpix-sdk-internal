@@ -24,3 +24,8 @@ bindings/dotnet/obj/
 # Android AAR build outputs
 bindings/kotlin/aar/.gradle/
 bindings/kotlin/aar/build/
+
+# NEVER commit private keys
+*release-key.priv
+*.priv
+*.pem

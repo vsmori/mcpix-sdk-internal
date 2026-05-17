@@ -124,6 +124,12 @@ jobs:
       - name: hash artifacts
         run: cargo xtask hash-artifacts
 
+      - name: sign SHA256SUMS
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: cargo xtask sign-artifacts
+
       # ── AAR ─────────────────────────────────────────────────────────────
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
@@ -142,6 +148,12 @@ jobs:
       - name: hash final artifacts
         run: cargo xtask hash-artifacts
 
+      - name: re-sign final SHA256SUMS
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: cargo xtask sign-artifacts
+
       # ── GitHub Release ──────────────────────────────────────────────────
       - name: github release
         if: startsWith(github.ref, 'refs/tags/')
@@ -149,6 +161,7 @@ jobs:
         with:
           files: |
             dist/SHA256SUMS
+            dist/SHA256SUMS.sig
             dist/**/*.so
             dist/**/*.dll
             dist/**/*.aar

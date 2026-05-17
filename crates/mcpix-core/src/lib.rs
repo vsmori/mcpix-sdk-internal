@@ -12,6 +12,7 @@
 pub mod crypto;
 pub mod error;
 pub mod integrity;
+pub mod signature;
 pub mod state;
 pub mod traits;
 pub mod transport_field;

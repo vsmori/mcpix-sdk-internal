@@ -36,6 +36,24 @@ jobs:
       - name: cargo test (sqlite feature)
         run: cargo test -p mcpix-receiver-sdk --features sqlite
 
+      - name: integration test against built artifact (hash only)
+        # Os dois primeiros tests do integrity_against_dist exigem só dist/
+        # — não precisam de SHA256SUMS.sig nem chave privada.
+        run: |
+          cargo xtask build-linux
+          cargo xtask hash-artifacts
+          cargo test -p mcpix-receiver-sdk --test integrity_against_dist \
+            verify_real_artifact verify_detects_tampering -- --ignored
+
+      - name: integration test with signed manifest (requires release privkey)
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: |
+          cargo xtask sign-artifacts
+          cargo test -p mcpix-receiver-sdk --test integrity_against_dist \
+            signed_manifest -- --ignored
+
       - name: check bindings drift
         run: cargo xtask check-bindings
 

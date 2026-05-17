@@ -20,3 +20,4 @@ rusqlite = { workspace = true, optional = true }
 [dev-dependencies]
 sha2 = { workspace = true }
 mcpix-core = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }

@@ -51,22 +51,53 @@ cargo xtask package-xcframework   # MCPixSDKFFI.xcframework (macOS host)
 cargo xtask package-nuget         # .nupkg via dotnet pack
 cargo xtask build-all             # tudo aplicável ao host
 cargo xtask hash-artifacts        # dist/SHA256SUMS sobre todo dist/
+
+# assinatura digital (S4)
+cargo xtask gen-release-key       # gera novo par Ed25519 (uma vez por rotação)
+MCPIX_SIGN_PRIVKEY_HEX=<hex> cargo xtask sign-artifacts  # gera SHA256SUMS.sig
 ```
 
-## Self-check de integridade
+## Self-check de integridade (S3 + S4)
 
-O núcleo (`mcpix_core::integrity`) e o glue runtime (`mcpix_receiver_sdk::integrity_runtime`)
-implementam verificação SHA-256 do binário carregado:
+Duas camadas de defesa:
 
-- Em build de release o pipeline injeta `MCPIX_EXPECTED_SHA256` ⇒ `verify_self()` retorna
-  `Verified` quando o `.so`/`.dylib`/`.dll` carregado bate com o hash do release,
-  `Tampered { expected, actual }` se houve adulteração.
-- Em build dev (sem env var carimbada) o método retorna `Skipped` para não atrapalhar
-  desenvolvimento.
+**S3 — SHA-256 self-check.** `mcpix_core::integrity::verify_bytes` compara o
+hash do binário carregado com `MCPIX_EXPECTED_SHA256` carimbado em build time.
+Detecta substituição/patch do binário. *Vulnerável* a atacante que recompile e
+re-carimbe o hash.
+
+**S4 — Manifesto assinado (Ed25519).** O CI assina `dist/SHA256SUMS` produzindo
+`dist/SHA256SUMS.sig` com chave privada em secret. A chave pública canônica está
+em `crates/mcpix-core/trusted_keys/release.pub` (32 bytes raw, commitada,
+embarcada via `include_bytes!`). `verify_self()` agora:
+
+1. Localiza `SHA256SUMS` + `SHA256SUMS.sig` ao lado do binário (ou no parent).
+2. Valida assinatura com `RELEASE_PUBKEY`.
+3. Procura o nome do próprio binário em `SHA256SUMS`.
+4. Compara hash. Retorna `Verified` / `Tampered`.
+
+Política:
+- **Release build** (com `MCPIX_EXPECTED_SHA256` carimbado) + manifest assinado presente
+  → exige verificação completa; ausência ou assinatura inválida ⇒ `Tampered`.
+- **Dev build** ⇒ `Skipped` (não derruba dev por falta de manifest).
 - Caller (fachada Swift/Kotlin/.NET) deve abortar inicialização em `Tampered`.
 
-Cobertura: 5 testes unitários em `crypto`/`integrity` + 2 integration tests
-contra o `.so` real (rodam após `cargo xtask build-linux`).
+### Rotação de chave
+
+```bash
+rm crates/mcpix-core/trusted_keys/release.pub
+cargo xtask gen-release-key        # imprime priv hex uma vez
+# copie a priv para o secret MCPIX_SIGN_PRIVKEY_HEX e backup offline
+git add crates/mcpix-core/trusted_keys/release.pub
+git commit -m "rotate release signing key"
+```
+
+### Cobertura
+
+- 10 unit tests em `mcpix_core::signature` (good sig, bad sig, wrong key,
+  malformed sums, hash mismatch, file absent, pubkey well-formed)
+- 5 integration tests em `tests/integrity_against_dist.rs` contra o `.so` real
+  e o manifest assinado (round-trip, tampering, swap, sums tampered)
 
 ## Cobertura de testes
 
@@ -93,8 +124,14 @@ contra o `.so` real (rodam após `cargo xtask build-linux`).
 - GitHub Actions: `ci.yml` (testes + clippy + bindings drift + Kotlin JVM)
   e `release.yml` (matriz Linux/macOS, publicação opcional em Maven/NuGet)
 
+**Sessão 4** (cadeia de confiança)
+- Ed25519 release key embarcada via `include_bytes!`
+- `xtask gen-release-key` + `xtask sign-artifacts` + verificação combinada
+  no runtime (assinatura + hash do manifest)
+- CI assina `SHA256SUMS` quando `MCPIX_SIGN_PRIVKEY_HEX` está presente
+
 ## Próximas sessões
 
-1. Assinatura GPG/cosign dos artefatos + verificação de cadeia na inicialização
-2. Remote attestation/TEE para defesa contra LD_PRELOAD e DLL hijacking
+1. Remote attestation/TEE para defesa contra LD_PRELOAD e DLL hijacking
+2. SLSA L3+ build provenance (sigstore + transparency log)
 3. Testes integrados Android (instrumented) e iOS (XCUITest)

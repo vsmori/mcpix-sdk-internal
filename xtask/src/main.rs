@@ -1,17 +1,21 @@
 //! cargo xtask — tarefas auxiliares do workspace.
 //!
 //! Uso:
-//!   cargo xtask gen-bindings        regenera bindings/c, bindings/swift, bindings/kotlin
-//!   cargo xtask check-bindings      regenera e falha se houver drift
-//!   cargo xtask build-linux         x86_64-unknown-linux-gnu (release)
-//!   cargo xtask build-windows       x86_64-pc-windows-gnu (release; requer mingw-w64)
-//!   cargo xtask build-android       4 ABIs Android via cargo-ndk (requer ANDROID_NDK_HOME)
-//!   cargo xtask build-ios           aarch64-apple-ios + aarch64-apple-ios-sim (somente macOS)
-//!   cargo xtask package-aar         empacota libmcpix_uniffi.so em AAR via gradle :assemble
-//!   cargo xtask package-xcframework empacota .a iOS em XCFramework (somente macOS)
-//!   cargo xtask package-nuget       gera .nupkg com .dll/.so via dotnet pack
-//!   cargo xtask build-all           tudo aplicável ao host atual
-//!   cargo xtask hash-artifacts      escreve dist/SHA256SUMS
+//!   cargo xtask gen-bindings           regenera bindings/c, bindings/swift, bindings/kotlin
+//!   cargo xtask check-bindings         regenera e falha se houver drift
+//!   cargo xtask build-linux            x86_64-unknown-linux-gnu (release)
+//!   cargo xtask build-windows          x86_64-pc-windows-gnu (release; requer mingw-w64)
+//!   cargo xtask build-android          4 ABIs Android via cargo-ndk (requer ANDROID_NDK_HOME)
+//!   cargo xtask build-ios              aarch64-apple-ios + aarch64-apple-ios-sim (somente macOS)
+//!   cargo xtask package-aar            empacota libmcpix_uniffi.so em AAR via gradle :assemble
+//!   cargo xtask package-xcframework    empacota .a iOS em XCFramework (somente macOS)
+//!   cargo xtask package-nuget          gera .nupkg com .dll/.so via dotnet pack
+//!   cargo xtask build-all              tudo aplicável ao host atual
+//!   cargo xtask hash-artifacts         escreve dist/SHA256SUMS
+//!   cargo xtask gen-release-key        gera novo par Ed25519 (pub commitada, priv escrita
+//!                                      em arquivo + impressa). USAR APENAS UMA VEZ por rotação.
+//!   cargo xtask sign-artifacts         assina dist/SHA256SUMS com MCPIX_SIGN_PRIVKEY_HEX
+//!                                      (env var contendo 64 chars hex = 32 bytes seed)
 //!
 //! Saída padronizada em `dist/<plataforma>/`.
 
@@ -350,6 +354,82 @@ fn walk(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Assinatura (sessão 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn gen_release_key(root: &Path) -> Result<(), String> {
+    use ed25519_dalek::{SigningKey, SECRET_KEY_LENGTH};
+    use rand_core::OsRng;
+
+    let pub_path = root.join("crates/mcpix-core/trusted_keys/release.pub");
+    let priv_path = root.join("target/release-key.priv");
+    mkdir(pub_path.parent().unwrap())?;
+    mkdir(priv_path.parent().unwrap())?;
+
+    if pub_path.exists() {
+        return Err(format!(
+            "release.pub already exists at {} — refusing to overwrite. \
+             Rotation must be explicit: delete the file first and re-run.",
+            pub_path.display()
+        ));
+    }
+
+    let sk = SigningKey::generate(&mut OsRng);
+    let pk = sk.verifying_key();
+    let seed: [u8; SECRET_KEY_LENGTH] = sk.to_bytes();
+
+    fs::write(&pub_path, pk.to_bytes()).map_err(|e| e.to_string())?;
+    fs::write(&priv_path, seed).map_err(|e| e.to_string())?;
+
+    let priv_hex: String = seed.iter().map(|b| format!("{b:02x}")).collect();
+    eprintln!("wrote {}", pub_path.display());
+    eprintln!("wrote {} (do NOT commit)", priv_path.display());
+    eprintln!();
+    eprintln!("Private key (hex, set as MCPIX_SIGN_PRIVKEY_HEX in CI secrets):");
+    eprintln!("  {priv_hex}");
+    eprintln!();
+    eprintln!("Public key (hex, for cross-checking):");
+    let pub_hex: String = pk.to_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    eprintln!("  {pub_hex}");
+    Ok(())
+}
+
+fn sign_artifacts(_root: &Path) -> Result<(), String> {
+    use ed25519_dalek::{Signer, SigningKey};
+
+    let sums = dist_dir().join("SHA256SUMS");
+    if !sums.exists() {
+        return Err(format!(
+            "{} not found — run `cargo xtask hash-artifacts` first",
+            sums.display()
+        ));
+    }
+    let key_hex = env::var("MCPIX_SIGN_PRIVKEY_HEX").map_err(|_| {
+        "MCPIX_SIGN_PRIVKEY_HEX env var unset — pass the 64-char hex seed of the \
+         release private key (in CI: from secret)".to_string()
+    })?;
+    if key_hex.len() != 64 {
+        return Err(format!(
+            "MCPIX_SIGN_PRIVKEY_HEX must be 64 hex chars, got {}",
+            key_hex.len()
+        ));
+    }
+    let mut seed = [0u8; 32];
+    for (i, chunk) in key_hex.as_bytes().chunks(2).enumerate() {
+        let s = core::str::from_utf8(chunk).map_err(|e| e.to_string())?;
+        seed[i] = u8::from_str_radix(s, 16).map_err(|e| e.to_string())?;
+    }
+    let sk = SigningKey::from_bytes(&seed);
+
+    let bytes = fs::read(&sums).map_err(|e| e.to_string())?;
+    let sig = sk.sign(&bytes).to_bytes();
+    let sig_path = dist_dir().join("SHA256SUMS.sig");
+    fs::write(&sig_path, sig).map_err(|e| e.to_string())?;
+    eprintln!("wrote {} ({} bytes)", sig_path.display(), sig.len());
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -369,6 +449,8 @@ fn print_help() {
     println!("  package-nuget        Pack .nupkg via dotnet pack");
     println!("  build-all            Run every step available on the current host");
     println!("  hash-artifacts       Write dist/SHA256SUMS over every file in dist/");
+    println!("  gen-release-key      Generate a new Ed25519 release keypair");
+    println!("  sign-artifacts       Sign dist/SHA256SUMS with MCPIX_SIGN_PRIVKEY_HEX");
 }
 
 fn main() -> ExitCode {
@@ -386,6 +468,8 @@ fn main() -> ExitCode {
         Some("package-nuget") => package_nuget(&root),
         Some("build-all") => build_all(&root),
         Some("hash-artifacts") => hash_artifacts(&root),
+        Some("gen-release-key") => gen_release_key(&root),
+        Some("sign-artifacts") => sign_artifacts(&root),
         Some("--help") | Some("-h") | None => {
             print_help();
             return ExitCode::SUCCESS;
