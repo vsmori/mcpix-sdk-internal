@@ -4,14 +4,14 @@
 
 use std::sync::Arc;
 
-use mcpix_bank_payer_mock::{PayerBankMock, PaymentRequest};
+use mcpix_bank_payer_mock::{PayerBankMock, PaymentRequest, PaymentRequestWindowed};
 use mcpix_bank_receiver::{BankReceiver, InMemoryBankReceiver, Requester};
 use mcpix_core::state::ValidationOutcome;
 use mcpix_core::traits::SeedStore;
 use mcpix_core::types::{Seed, SeedId};
 use mcpix_receiver_sdk::{
-    memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter,
-    system_random::OsRandom, ReceiverSdk,
+    clock::TestClock, memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter,
+    system_random::OsRandom, timestamp_counter::TimestampQuantizedCounter, ReceiverSdk,
 };
 
 fn step(n: usize, title: &str) {
@@ -92,6 +92,71 @@ fn main() {
         .unwrap();
     assert_eq!(replay, ValidationOutcome::Replay);
     println!("• resultado: ✗ REPLAY — defesa de uso único acionada");
+
+    // ──────────────── PARTE B: modo timestamp quantizado ────────────────
+    println!("\n══════════════════ PARTE B ══════════════════");
+    println!("Mesma demo com T = timestamp quantizado (RFC 6238 style)");
+    println!("Janela: 30s. Recebedor e banco compartilham relógio para a demo.");
+
+    // Clock determinístico — ambos os lados leem do mesmo TestClock.
+    let clock = Arc::new(TestClock::new(1_700_000_010));
+    let q_counter = Arc::new(TimestampQuantizedCounter::with_window(clock.clone(), 30));
+    let q_store = Arc::new(InMemorySeedStore::new());
+    let q_sdk = ReceiverSdk::new(q_store.clone(), q_counter.clone(), Arc::new(OsRandom));
+
+    let q_sid = SeedId::new("R2").unwrap();
+    q_sdk.register(q_sid.clone()).unwrap();
+    let q_seed_for_bank = q_store.get_seed(&q_sid).unwrap().unwrap();
+    receiver_bank.register_seed(&q_sid, q_seed_for_bank).unwrap();
+
+    step(6, "recebedor gera cobrança no quantum atual (T = now/30)");
+    let q_charge = q_sdk.generate_charge(&q_sid, 4200).unwrap();
+    // Acesso ao TestClock via método inerente (não trait), evitando ambiguidade.
+    let now = mcpix_core::traits::Clock::now_unix_secs(clock.as_ref());
+    println!("• T usado: {} (= {} / 30)", q_charge.counter, now);
+    println!("• campo de transporte: {}", q_charge.transport_field);
+
+    step(7, "tentativa de 2ª cobrança no mesmo quantum: rejeitada");
+    let err = q_sdk.generate_charge(&q_sid, 100).unwrap_err();
+    println!("• erro retornado: {err}");
+
+    step(8, "avança o relógio +30s → próximo quantum → 2ª cobrança OK");
+    clock.advance(30);
+    let q_charge2 = q_sdk.generate_charge(&q_sid, 100).unwrap();
+    println!("• T usado: {} (após advance)", q_charge2.counter);
+    assert_eq!(q_charge2.counter, q_charge.counter + 1);
+
+    step(9, "banco pagador processa com tolerância de ±1 janela (drift simulado)");
+    // Simulamos drift: banco tem clock 10s atrás do recebedor mas dentro do quantum.
+    let payer_bank_q = PayerBankMock::new(&receiver_bank);
+    let receipt_w = payer_bank_q
+        .process_payment_windowed(PaymentRequestWindowed {
+            instrument_string: &q_charge.transport_field,
+            amount_cents: 4200,
+            current_quantum: q_charge.counter, // banco "concorda" com o quantum
+            tolerance_windows: 1,
+            requester: Requester { institution_id: "BANK_PAYER".into() },
+        })
+        .unwrap();
+    println!("• candidatos emitidos pelo banco: {}", receipt_w.candidates.len());
+    for (t, c2) in &receipt_w.candidates {
+        let mark = if *t == q_charge.counter { "← match esperado" } else { "" };
+        println!("  ├─ T={t}  →  C₂={c2}  {mark}");
+    }
+
+    step(10, "recebedor tenta cada candidato — primeiro match é o vencedor");
+    let mut accepted = false;
+    for (_, c2) in &receipt_w.candidates {
+        if matches!(
+            q_sdk.validate_receipt(&q_sid, q_charge.counter, c2).unwrap(),
+            ValidationOutcome::Valid
+        ) {
+            println!("• ✓ VALID com C₂={c2}");
+            accepted = true;
+            break;
+        }
+    }
+    assert!(accepted, "windowed flow should accept the matching candidate");
 
     println!("\n────── demo concluída ──────");
 }

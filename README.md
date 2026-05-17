@@ -147,6 +147,19 @@ git commit -m "rotate release signing key"
 - `.github/workflows/fuzz.yml`: 1 min por target em PR, 30 min em schedule
   semanal, com upload de crash artifacts em falha
 
+**Sessão 6** (T = timestamp quantizado, fechando gap com a reivindicação PCT)
+- `TimestampQuantizedCounter` (janela default 30s, RFC 6238 style) ao lado
+  do `InMemoryCounter` sequencial — ambos satisfazem o trait `Counter`
+- Garantias enforçadas: monotonia, anti-colisão no mesmo quantum
+  (`McpixError::CounterCollision`), anti-rollback de relógio
+  (`McpixError::CounterRollback`)
+- `SystemClock` e `TestClock` concretos para a trait `Clock` do núcleo
+- `PayerBankMock::process_payment_windowed` emite 2N+1 candidatos C₂ para
+  tolerar drift de até N janelas entre recebedor e banco
+- Demo `e2e_demo` estendido com PARTE B mostrando colisão dentro da janela,
+  avanço de relógio e validação com tolerância
+- 11 testes novos cobrindo os caminhos de quantização e tolerância
+
 ## Próximas sessões
 
 1. Remote attestation/TEE para defesa contra LD_PRELOAD e DLL hijacking

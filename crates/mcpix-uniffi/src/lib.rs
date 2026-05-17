@@ -53,7 +53,9 @@ impl From<mcpix_core::error::McpixError> for McpixUniffiError {
             E::SeedIdLength { .. } | E::SeedIdCharset => Self::InvalidSeedId(e.to_string()),
             E::UnknownSeed => Self::UnknownSeed,
             E::NoRetainedReceipt => Self::NoRetainedReceipt,
-            E::CounterOverflow => Self::CounterOverflow,
+            E::CounterOverflow
+            | E::CounterCollision { .. }
+            | E::CounterRollback { .. } => Self::CounterOverflow,
             E::TransportFieldLength(_)
             | E::TransportFieldCharset(_)
             | E::TransportFieldPrefix

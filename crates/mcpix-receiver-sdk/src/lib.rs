@@ -7,10 +7,12 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 
+pub mod clock;
 pub mod integrity_runtime;
 pub mod memory_store;
 pub mod monotonic_counter;
 pub mod system_random;
+pub mod timestamp_counter;
 
 #[cfg(feature = "sqlite")]
 pub mod sqlite_store;

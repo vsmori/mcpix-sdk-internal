@@ -37,7 +37,9 @@ impl From<&McpixError> for McpixStatus {
             McpixError::SeedIdLength { .. } => McpixStatus::SeedIdLength,
             McpixError::SeedIdCharset => McpixStatus::SeedIdCharset,
             McpixError::SeedLength { .. } => McpixStatus::SeedLength,
-            McpixError::CounterOverflow => McpixStatus::CounterOverflow,
+            McpixError::CounterOverflow
+            | McpixError::CounterCollision { .. }
+            | McpixError::CounterRollback { .. } => McpixStatus::CounterOverflow,
             McpixError::UnknownSeed => McpixStatus::UnknownSeed,
             McpixError::NoRetainedReceipt => McpixStatus::NoRetainedReceipt,
             McpixError::ReplayRejected => McpixStatus::ReplayRejected,

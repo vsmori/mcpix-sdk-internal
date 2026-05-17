@@ -47,6 +47,40 @@ pub struct PaymentRequest<'a> {
     pub requester: Requester,
 }
 
+/// Variante com tolerância de janela — usada quando o counter é timestamp
+/// quantizado e clocks recebedor/banco podem divergir em até `tolerance`
+/// janelas. O banco devolve um C₂ candidato para cada T no intervalo
+/// `[counter - tolerance, counter + tolerance]`; o recebedor compara cada
+/// candidato com o(s) retained receipt(s) correspondente(s).
+///
+/// Por que múltiplos candidatos em vez de um T canônico:
+/// - O receiver pode ter emitido com T_r e o bank computou T_b a partir do
+///   próprio clock; se `|T_r - T_b| <= tolerance`, o receipt válido está em
+///   alguma das janelas.
+/// - Quem decide a tolerância é política do banco — não do protocolo.
+pub struct PaymentRequestWindowed<'a> {
+    pub instrument_string: &'a str,
+    pub amount_cents: u64,
+    /// Quantum atual do banco (`now_unix_secs / window_seconds`).
+    pub current_quantum: u64,
+    /// Quantos quanta antes/depois aceitar como válidos. Tipicamente 1 (=±30s
+    /// com janela de 30s).
+    pub tolerance_windows: u32,
+    pub requester: Requester,
+}
+
+/// Saída da variante com tolerância: comprovante "tentativa" para cada T no
+/// intervalo. O recebedor tenta validar cada um — o primeiro que bater no
+/// retained receipt é o efetivo.
+#[derive(Clone, Debug)]
+pub struct WindowedPaymentReceipt {
+    pub receiver_seed_id: SeedId,
+    pub amount_cents: u64,
+    /// Candidatos `(counter, c2_identifier)` em ordem crescente de T.
+    pub candidates: Vec<(u64, String)>,
+    pub note: &'static str,
+}
+
 pub struct PayerBankMock<'a> {
     bank_receiver: &'a dyn BankReceiver,
 }
@@ -77,6 +111,38 @@ impl<'a> PayerBankMock<'a> {
             amount_cents: req.amount_cents,
             identifier: c2.as_str().to_string(),
             note: "settled via institutional substitution",
+        })
+    }
+
+    /// Processa pagamento gerando candidatos para ±`tolerance_windows`
+    /// janelas em torno de `current_quantum`. Usado quando T = timestamp
+    /// quantizado e há drift potencial entre relógios.
+    pub fn process_payment_windowed(
+        &self,
+        req: PaymentRequestWindowed<'_>,
+    ) -> Result<WindowedPaymentReceipt, McpixError> {
+        if !is_protocol_field(req.instrument_string) {
+            return Err(McpixError::TransportFieldPrefix);
+        }
+        let parsed = transport_field::parse(req.instrument_string)?;
+        let seed = self
+            .bank_receiver
+            .lookup_seed(&parsed.seed_id, &req.requester)?;
+
+        let tol = req.tolerance_windows as u64;
+        let lo = req.current_quantum.saturating_sub(tol);
+        let hi = req.current_quantum.saturating_add(tol);
+        let mut candidates = Vec::with_capacity((hi - lo + 1) as usize);
+        for t in lo..=hi {
+            let c2: C2 = apply_recover_c2(&seed, t, &parsed.c1);
+            candidates.push((t, c2.as_str().to_string()));
+        }
+
+        Ok(WindowedPaymentReceipt {
+            receiver_seed_id: parsed.seed_id,
+            amount_cents: req.amount_cents,
+            candidates,
+            note: "settled via institutional substitution (windowed)",
         })
     }
 }
@@ -126,5 +192,97 @@ mod tests {
             })
             .unwrap_err();
         assert_eq!(err, McpixError::TransportFieldPrefix);
+    }
+
+    #[test]
+    fn windowed_produces_2n_plus_1_candidates_with_correct_c2_at_center() {
+        let seed = Seed::from_bytes([0x55; 32]);
+        let sid = SeedId::new("R1").unwrap();
+        let bank_r = InMemoryBankReceiver::new();
+        bank_r.register_seed(&sid, seed.clone()).unwrap();
+
+        // Recebedor emitiu com T=100 (quantum específico).
+        let outcome = apply_generate_charge(
+            &seed,
+            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+        );
+
+        let payer_bank = PayerBankMock::new(&bank_r);
+        // Banco computou quantum 100 (clocks alinhados) e aceita ±1.
+        let receipt = payer_bank
+            .process_payment_windowed(PaymentRequestWindowed {
+                instrument_string: &outcome.charge.transport_field,
+                amount_cents: 50,
+                current_quantum: 100,
+                tolerance_windows: 1,
+                requester: Requester { institution_id: "PAYER".into() },
+            })
+            .unwrap();
+
+        assert_eq!(receipt.candidates.len(), 3); // 99, 100, 101
+        let (t_center, c2_center) = &receipt.candidates[1];
+        assert_eq!(*t_center, 100);
+        assert_eq!(c2_center, outcome.retained.expected_c2.as_str());
+    }
+
+    #[test]
+    fn windowed_with_drifted_clock_still_includes_correct_quantum() {
+        let seed = Seed::from_bytes([0x55; 32]);
+        let sid = SeedId::new("R1").unwrap();
+        let bank_r = InMemoryBankReceiver::new();
+        bank_r.register_seed(&sid, seed.clone()).unwrap();
+
+        // Recebedor emitiu com T=100; banco está atrasado 1 quantum (T=99).
+        let outcome = apply_generate_charge(
+            &seed,
+            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+        );
+        let payer_bank = PayerBankMock::new(&bank_r);
+        let receipt = payer_bank
+            .process_payment_windowed(PaymentRequestWindowed {
+                instrument_string: &outcome.charge.transport_field,
+                amount_cents: 50,
+                current_quantum: 99,
+                tolerance_windows: 1,
+                requester: Requester { institution_id: "PAYER".into() },
+            })
+            .unwrap();
+
+        // Candidatos: 98, 99, 100. O correto (100) está incluído.
+        let matched = receipt
+            .candidates
+            .iter()
+            .any(|(t, c2)| *t == 100 && c2 == outcome.retained.expected_c2.as_str());
+        assert!(matched, "candidate set should include T=100 within ±1 window");
+    }
+
+    #[test]
+    fn windowed_excludes_drift_beyond_tolerance() {
+        let seed = Seed::from_bytes([0x55; 32]);
+        let sid = SeedId::new("R1").unwrap();
+        let bank_r = InMemoryBankReceiver::new();
+        bank_r.register_seed(&sid, seed.clone()).unwrap();
+
+        let outcome = apply_generate_charge(
+            &seed,
+            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+        );
+        let payer_bank = PayerBankMock::new(&bank_r);
+        // Banco com clock 5 quanta adiantado, tolerância apenas ±1.
+        let receipt = payer_bank
+            .process_payment_windowed(PaymentRequestWindowed {
+                instrument_string: &outcome.charge.transport_field,
+                amount_cents: 50,
+                current_quantum: 105,
+                tolerance_windows: 1,
+                requester: Requester { institution_id: "PAYER".into() },
+            })
+            .unwrap();
+
+        let any_match = receipt
+            .candidates
+            .iter()
+            .any(|(_, c2)| c2 == outcome.retained.expected_c2.as_str());
+        assert!(!any_match, "drift beyond tolerance must not be acceptable");
     }
 }

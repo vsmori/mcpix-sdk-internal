@@ -25,6 +25,12 @@ pub enum McpixError {
     #[error("counter overflow")]
     CounterOverflow,
 
+    #[error("counter collision: another charge already issued in the current window ({window_seconds}s)")]
+    CounterCollision { window_seconds: u64 },
+
+    #[error("counter rollback detected: clock moved backwards (last={last}, now={now})")]
+    CounterRollback { last: u64, now: u64 },
+
     #[error("unknown seed id")]
     UnknownSeed,
 
