@@ -45,3 +45,13 @@ impl SeedPayload {
 pub struct ErrorBody {
     pub error: String,
 }
+
+/// Resposta de `GET /v1/capabilities`. Lista as versões do protocolo
+/// que **este recebedor** consegue parsear/emitir, codificadas como o
+/// prefixo de 8 bytes (e.g. `"PIXOFFv1"`). Strings, não ints — assim
+/// um peer com SDK mais antigo recebe `"PIXOFFv2"` sem que o parser
+/// JSON falhe (apenas ignora na negociação).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CapabilitiesPayload {
+    pub versions: Vec<String>,
+}

@@ -61,6 +61,54 @@ o usuário com SDK antigo que escaneia uma cobrança v2 precisa saber
 *o que* atualizar — "atualize seu app de banco" — e não confundir com
 "isto não é uma cobrança PIX".
 
+## Capability negotiation inter-bancos
+
+Antes de iniciar uma transação, o banco do pagador pode (e deve)
+consultar quais versões o banco do recebedor suporta:
+
+```
+GET /v1/capabilities
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{ "versions": ["PIXOFFv1"] }
+```
+
+A SDK provê tanto o endpoint (`mcpix_bank_receiver::http_server`)
+quanto o cliente (`HttpBankReceiver::supported_versions`) e o helper
+de seleção (`mcpix_core::version::negotiate_version`):
+
+```rust
+let client = HttpBankReceiver::new(base_url);
+let peer = client.supported_versions()?;
+let peer_strs: Vec<String> = peer.iter().map(|v| v.prefix().to_string()).collect();
+
+let agreed = version::negotiate_version(ProtocolVersion::all(), &peer_strs)
+    .ok_or_else(|| /* sem versão comum: abortar transação */)?;
+```
+
+Política embutida:
+
+- **Maior comum primeiro**: `negotiate_version` itera `local.iter().rev()` e
+  escolhe a maior versão presente em ambos. Para introduzir V2 sem
+  flag-day, basta os dois lados subirem a SDK; bancos legados continuam
+  vendo V1 mutuamente.
+- **Strings, não enums, no fio**: a resposta é `["PIXOFFv1"]`, não
+  inteiros. Um peer que anuncie `PIXOFFv2` para um cliente V1-only
+  passa pelo JSON sem quebrar — só é filtrado na negociação.
+- **`HttpBankReceiver::supported_versions`** filtra para o que **este
+  build** conhece; para preservar a info crua (e.g. relatar "peer
+  fala v9 mas não sabemos") use `negotiate_version` diretamente sobre
+  o JSON.
+
+A infraestrutura **não decide** o que fazer com `None` — caller
+decide:
+
+| Caso | Ação típica |
+|---|---|
+| `Some(V_n)` | Prosseguir; emitir cobranças em V_n |
+| `None` | Abortar transação; logar "no common version" para alertar operações |
+
 ## Política de introdução de nova versão
 
 ### Quando bumper

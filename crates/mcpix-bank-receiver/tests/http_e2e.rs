@@ -114,3 +114,80 @@ async fn full_protocol_through_http() {
     assert_eq!(outcome_ok, ValidationOutcome::Valid);
     let _ = shutdown.send(());
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Capability negotiation (S17)
+// ─────────────────────────────────────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread")]
+async fn http_capabilities_reports_v1() {
+    // O receiver in-memory usa o default da trait, que devolve tudo
+    // que o build conhece — hoje só V1.
+    let (addr, shutdown) = boot_server().await;
+    let base = format!("http://{addr}");
+
+    let versions = tokio::task::spawn_blocking(move || {
+        let client = HttpBankReceiver::new(base);
+        client.supported_versions().unwrap()
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(
+        versions,
+        vec![mcpix_core::version::ProtocolVersion::V1],
+        "default impl should advertise everything in ProtocolVersion::all()"
+    );
+    let _ = shutdown.send(());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn http_capabilities_payload_matches_wire_contract() {
+    // Acessa o endpoint cru e verifica a forma exata do JSON. Se
+    // alguém mudar `CapabilitiesPayload` para `{caps: [...]}` em vez
+    // de `{versions: [...]}`, isso quebra aqui antes do peer real.
+    let (addr, shutdown) = boot_server().await;
+    let url = format!("http://{addr}/v1/capabilities");
+
+    let body = tokio::task::spawn_blocking(move || {
+        reqwest::blocking::get(url)
+            .unwrap()
+            .text()
+            .unwrap()
+    })
+    .await
+    .unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let versions = parsed["versions"].as_array().expect("versions array");
+    assert!(versions.iter().any(|v| v == "PIXOFFv1"));
+    let _ = shutdown.send(());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn negotiation_with_real_server_picks_v1() {
+    // End-to-end: cliente faz capability call → roda negotiate sobre
+    // resultado → pega V1. Demonstra o caminho recomendado para
+    // payer banks no doc.
+    let (addr, shutdown) = boot_server().await;
+    let base = format!("http://{addr}");
+
+    let agreed = tokio::task::spawn_blocking(move || {
+        let client = HttpBankReceiver::new(base);
+        // Esta lista deveria vir do request_response cru para o caminho
+        // de "peer suporta versões que este build desconhece"; aqui
+        // usamos a versão já filtrada porque cobre o caso comum.
+        let peer = client.supported_versions().unwrap();
+        let peer_as_strings: Vec<String> =
+            peer.iter().map(|v| v.prefix().to_string()).collect();
+        mcpix_core::version::negotiate_version(
+            mcpix_core::version::ProtocolVersion::all(),
+            &peer_as_strings,
+        )
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(agreed, Some(mcpix_core::version::ProtocolVersion::V1));
+    let _ = shutdown.send(());
+}

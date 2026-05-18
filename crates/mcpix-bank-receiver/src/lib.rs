@@ -32,6 +32,7 @@ use parking_lot::RwLock;
 
 use mcpix_core::error::McpixError;
 use mcpix_core::types::{Seed, SeedId};
+use mcpix_core::version::ProtocolVersion;
 
 /// Contrato do banco recebedor — equivalente em escopo a `SeedStore`, porém
 /// distinto semanticamente (institucional, não local). Mantemos traits separadas
@@ -40,6 +41,23 @@ pub trait BankReceiver: Send + Sync {
     fn register_seed(&self, receiver_id: &SeedId, seed: Seed) -> Result<(), McpixError>;
     fn lookup_seed(&self, receiver_id: &SeedId, requester: &Requester)
         -> Result<Seed, McpixError>;
+
+    /// Lista as versões do protocolo que **este peer** consegue emitir e
+    /// parsear. Usado pelo banco do pagador (ou outro peer) antes de
+    /// iniciar transações para detectar incompatibilidade cedo —
+    /// substituindo o sintoma tardio "instrumento chega e ninguém
+    /// consegue parsear" por um round-trip de capability.
+    ///
+    /// **Default**: anuncia tudo que este build da SDK conhece via
+    /// [`ProtocolVersion::all`]. Implementações que custodiem políticas
+    /// (ex. desligar V1 após data X) podem sobrescrever.
+    ///
+    /// Implementações HTTP devem fazer a chamada remota
+    /// (`GET /v1/capabilities`) — não confiar no default, que seria a
+    /// capacidade *local* e não a do peer.
+    fn supported_versions(&self) -> Result<Vec<ProtocolVersion>, McpixError> {
+        Ok(ProtocolVersion::all().to_vec())
+    }
 }
 
 /// Identidade do requerente em uma consulta inter-institucional. Hoje só

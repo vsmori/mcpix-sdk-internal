@@ -3,6 +3,7 @@
 //! Endpoints (todos sob `/v1`):
 //!   POST   /v1/seeds/{seed_id}      registra semente (body: SeedPayload)
 //!   GET    /v1/seeds/{seed_id}      retorna semente (body: SeedPayload)
+//!   GET    /v1/capabilities         versões do protocolo suportadas
 //!   GET    /v1/healthz              liveness probe
 //!
 //! Auth: **nenhuma** nesta sessão. O contrato `BankReceiver::lookup_seed`
@@ -23,7 +24,7 @@ use axum::{Json, Router};
 use serde_json::json;
 use tokio::net::TcpListener;
 
-use crate::wire::{ErrorBody, SeedPayload};
+use crate::wire::{CapabilitiesPayload, ErrorBody, SeedPayload};
 use crate::{BankReceiver, Requester};
 use mcpix_core::error::McpixError;
 use mcpix_core::types::SeedId;
@@ -33,6 +34,7 @@ use mcpix_core::types::SeedId;
 pub fn router(bank: Arc<dyn BankReceiver>) -> Router {
     Router::new()
         .route("/v1/seeds/{seed_id}", post(put_seed).get(get_seed))
+        .route("/v1/capabilities", get(get_capabilities))
         .route("/v1/healthz", get(|| async { "ok" }))
         .with_state(bank)
 }
@@ -98,6 +100,18 @@ async fn get_seed(
     match bank.lookup_seed(&sid, &requester) {
         Ok(seed) => (StatusCode::OK, Json(SeedPayload::from_seed(&seed))).into_response(),
         Err(McpixError::UnknownSeed) => mcpix_err(StatusCode::NOT_FOUND, McpixError::UnknownSeed),
+        Err(e) => mcpix_err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+async fn get_capabilities(State(bank): State<Arc<dyn BankReceiver>>) -> Response {
+    match bank.supported_versions() {
+        Ok(versions) => {
+            let payload = CapabilitiesPayload {
+                versions: versions.iter().map(|v| v.prefix().to_string()).collect(),
+            };
+            (StatusCode::OK, Json(payload)).into_response()
+        }
         Err(e) => mcpix_err(StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }

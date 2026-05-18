@@ -115,6 +115,30 @@ pub fn is_any_version(field: &str) -> bool {
         && field[..PROTOCOL_PREFIX_LEN].starts_with(PROTOCOL_PREFIX_FAMILY)
 }
 
+/// Negocia a versão **mais alta** suportada por ambos os lados.
+///
+/// `local` é o que **este** build conhece (tipicamente
+/// `ProtocolVersion::all()`). `peer` é a lista de prefixos anunciada
+/// pelo outro lado via capability endpoint (strings tipo `"PIXOFFv1"`
+/// — strings e não enum porque um peer pode anunciar versões que
+/// este build nem reconhece como enum, e seria ruim falhar parse
+/// nessa direção).
+///
+/// Retorna `None` se a interseção for vazia — caller decide se isso
+/// é fatal (abort transação) ou warn-and-continue (assumir default
+/// e ver o que acontece).
+///
+/// Como o enum `ProtocolVersion` está em ordem ascendente de versão,
+/// iteramos `local.iter().rev()` para devolver a **maior versão
+/// comum** — política padrão de "negociate the newest both speak".
+pub fn negotiate_version(local: &[ProtocolVersion], peer: &[String]) -> Option<ProtocolVersion> {
+    local
+        .iter()
+        .rev()
+        .find(|v| peer.iter().any(|s| s == v.prefix()))
+        .copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +201,45 @@ mod tests {
         // Anchor da invariante ABI — se este teste quebrar, alguém
         // mexeu no `#[repr(u8)]` enum.
         assert_eq!(ProtocolVersion::V1 as u8, 1);
+    }
+
+    #[test]
+    fn negotiate_picks_v1_when_peer_supports_it() {
+        let local = [ProtocolVersion::V1];
+        let peer = vec!["PIXOFFv1".to_string()];
+        assert_eq!(negotiate_version(&local, &peer), Some(ProtocolVersion::V1));
+    }
+
+    #[test]
+    fn negotiate_returns_none_when_disjoint() {
+        // Peer só fala v99 (futuro); este build só conhece V1.
+        let local = [ProtocolVersion::V1];
+        let peer = vec!["PIXOFFv9".to_string()];
+        assert_eq!(negotiate_version(&local, &peer), None);
+    }
+
+    #[test]
+    fn negotiate_picks_highest_common_even_when_peer_has_more() {
+        // Peer suporta v1 + (futurística) v9. Este build só conhece
+        // v1 → escolhe v1, único comum.
+        let local = [ProtocolVersion::V1];
+        let peer = vec!["PIXOFFv9".to_string(), "PIXOFFv1".to_string()];
+        assert_eq!(negotiate_version(&local, &peer), Some(ProtocolVersion::V1));
+    }
+
+    #[test]
+    fn negotiate_ignores_unknown_peer_versions() {
+        // Strings desconhecidas pelo enum não quebram a negociação —
+        // só não contam para interseção.
+        let local = [ProtocolVersion::V1];
+        let peer = vec!["GIBBERISH".to_string(), "PIXOFFv1".to_string()];
+        assert_eq!(negotiate_version(&local, &peer), Some(ProtocolVersion::V1));
+    }
+
+    #[test]
+    fn negotiate_empty_peer_returns_none() {
+        // Peer não anunciou nada — sem versão para negociar.
+        let local = [ProtocolVersion::V1];
+        assert_eq!(negotiate_version(&local, &[]), None);
     }
 }

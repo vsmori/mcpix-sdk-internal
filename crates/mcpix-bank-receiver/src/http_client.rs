@@ -11,8 +11,9 @@
 
 use mcpix_core::error::McpixError;
 use mcpix_core::types::{Seed, SeedId};
+use mcpix_core::version::ProtocolVersion;
 
-use crate::wire::SeedPayload;
+use crate::wire::{CapabilitiesPayload, SeedPayload};
 use crate::{BankReceiver, Requester};
 
 pub struct HttpBankReceiver {
@@ -37,6 +38,10 @@ impl HttpBankReceiver {
 
     fn seed_url(&self, seed_id: &SeedId) -> String {
         format!("{}/v1/seeds/{}", self.base_url, seed_id.as_str())
+    }
+
+    fn capabilities_url(&self) -> String {
+        format!("{}/v1/capabilities", self.base_url)
     }
 }
 
@@ -79,5 +84,36 @@ impl BankReceiver for HttpBankReceiver {
             s if s == reqwest::StatusCode::NOT_FOUND => Err(McpixError::UnknownSeed),
             s => Err(McpixError::Transport(format!("GET seed returned {s}"))),
         }
+    }
+
+    /// Sobrescrita do default da trait: consulta o peer remoto via
+    /// `GET /v1/capabilities`. Strings desconhecidas pelo enum local
+    /// são ignoradas — não falha se o peer reportar `PIXOFFv9`.
+    fn supported_versions(&self) -> Result<Vec<ProtocolVersion>, McpixError> {
+        let resp = self
+            .client
+            .get(self.capabilities_url())
+            .send()
+            .map_err(|e| McpixError::Transport(format!("GET capabilities: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(McpixError::Transport(format!(
+                "GET capabilities returned {}",
+                resp.status()
+            )));
+        }
+        let payload: CapabilitiesPayload = resp
+            .json()
+            .map_err(|e| McpixError::Transport(format!("decode capabilities: {e}")))?;
+        // Filtra para variantes conhecidas deste build. Versões
+        // anunciadas que ainda não estão no nosso enum somem aqui —
+        // o helper `version::negotiate_version` (que opera sobre as
+        // strings cruas) preserva a info quando o caller precisa.
+        let mut out = Vec::with_capacity(payload.versions.len());
+        for v in ProtocolVersion::all() {
+            if payload.versions.iter().any(|s| s == v.prefix()) {
+                out.push(*v);
+            }
+        }
+        Ok(out)
     }
 }
