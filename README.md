@@ -385,8 +385,10 @@ parágrafos "fora do escopo" pelos docs e resumos de sessão).
 
 ### Resíduos (cobertos, com parcela diferida)
 
-3. **SLSA L4 hermético** (§5.3 / `docs/SLSA.md`) — `cargo --offline`,
-   auditoria de `build.rs` não-determinísticos, comparação cross-runner.
+3. **SLSA L4 hermético** (§5.3 / `docs/SLSA.md` / `docs/SLSA_L4_PROGRESS.md`) —
+   `xtask verify-hermetic` + toolchain pinada + catálogo de `build.rs`
+   prontos. Falta: CI rotineiro do hermetic build, cross-runner hash
+   comparison, audit crate-a-crate da Categoria C.
 4. **Live OCSP query** (§6.5 / `docs/MTLS_REVOCATION.md`) — hoje só
    stapling; cliente fazer OCSP request a cada handshake é incremento.
 5. **Anti-replay de backup** (`mcpix-backup/src/lib.rs`) — protocolo

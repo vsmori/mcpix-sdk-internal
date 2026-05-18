@@ -453,6 +453,86 @@ fn print_help() {
     println!("  sign-artifacts       Sign dist/SHA256SUMS with MCPIX_SIGN_PRIVKEY_HEX");
     println!("  build-wasm           Build mcpix-wasm + run wasm-bindgen → examples/web-demo/pkg");
     println!("  fuzz-replay          Replay versioned corpus through fuzz targets (no nightly)");
+    println!("  verify-hermetic      Vendor deps and build with --frozen --locked --offline (SLSA L4 prep)");
+}
+
+fn verify_hermetic(root: &Path) -> Result<(), String> {
+    // Esta task implementa a **primeira fase** de SLSA L4: prova
+    // operacional de que o build não depende de rede após o ponto de
+    // vendor. Sequência:
+    //   1) `cargo vendor` baixa todas as deps para `./vendor/`.
+    //   2) Escreve `.cargo/config.hermetic.toml` apontando o source
+    //      de crates.io para o diretório vendored.
+    //   3) `cargo build --frozen --locked --offline` com a config
+    //      acima — se algum dep faltar ou cargo tentar resolver da
+    //      rede, falha.
+    //
+    // A *segunda* fase (cross-runner hash compare para reprodutibilidade
+    // bit-exata) fica como roadmap — exige run pareado em CI.
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+
+    println!("[1/3] cargo vendor (esta etapa baixa toda a árvore de deps)");
+    let vendor_config_path = root.join(".cargo/config.hermetic.toml");
+    std::fs::create_dir_all(root.join(".cargo"))
+        .map_err(|e| format!("mkdir .cargo: {e}"))?;
+    let output = std::process::Command::new(&cargo)
+        .args(["vendor", "--locked", "vendor"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("cargo vendor failed to spawn: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo vendor failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    std::fs::write(&vendor_config_path, &output.stdout)
+        .map_err(|e| format!("write {}: {e}", vendor_config_path.display()))?;
+    println!("    config escrita em {}", vendor_config_path.display());
+
+    println!("[2/3] cargo build --frozen --locked --offline (workspace default features)");
+    let status = std::process::Command::new(&cargo)
+        .args([
+            "build",
+            "--workspace",
+            "--frozen",
+            "--locked",
+            "--offline",
+            "--config",
+            &format!("include=[\"{}\"]", vendor_config_path.display()),
+        ])
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo build hermetic failed to spawn: {e}"))?;
+    if !status.success() {
+        return Err(
+            "cargo build hermetic falhou — alguma dep tentou rede ou está faltando do vendor"
+                .into(),
+        );
+    }
+
+    println!("[3/3] mesmo build com --all-targets (testes, exemplos, benches)");
+    let status = std::process::Command::new(&cargo)
+        .args([
+            "build",
+            "--workspace",
+            "--all-targets",
+            "--frozen",
+            "--locked",
+            "--offline",
+            "--config",
+            &format!("include=[\"{}\"]", vendor_config_path.display()),
+        ])
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo build --all-targets hermetic failed: {e}"))?;
+    if !status.success() {
+        return Err("cargo build --all-targets hermetic falhou".into());
+    }
+
+    println!("\nOK: build hermético verificado. Próximos passos para SLSA L4 full");
+    println!("    em docs/SLSA_L4_PROGRESS.md.");
+    Ok(())
 }
 
 fn fuzz_replay(root: &Path) -> Result<(), String> {
@@ -537,6 +617,7 @@ fn main() -> ExitCode {
         Some("sign-artifacts") => sign_artifacts(&root),
         Some("build-wasm") => build_wasm(&root),
         Some("fuzz-replay") => fuzz_replay(&root),
+        Some("verify-hermetic") => verify_hermetic(&root),
         Some("--help") | Some("-h") | None => {
             print_help();
             return ExitCode::SUCCESS;

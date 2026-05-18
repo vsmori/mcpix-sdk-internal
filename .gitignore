@@ -30,6 +30,12 @@ bindings/kotlin/aar/build/
 # truth — quem clona reconstrói.
 examples/web-demo/pkg/
 
+# Vendored deps gerada por `cargo xtask verify-hermetic`. Não
+# comitamos (50+ MB, 184 crates) — o teste hermético reconstrói on
+# demand. O Cargo.lock é a source of truth de versões.
+/vendor/
+.cargo/config.hermetic.toml
+
 # NEVER commit private keys
 *release-key.priv
 *.priv

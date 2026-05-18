@@ -1,0 +1,25 @@
+# Pin do compilador. Requisito SLSA L4: build hermético reproduzível
+# começa com o compilador. Mudar este arquivo dispara reverify completo
+# da reproducibilidade — não bumpe sem coordenar com release/CI.
+#
+# Estratégia: `channel = "stable"` (não pinning a um número exato como
+# "1.94.1") porque:
+#   1. CI roda no GHA com `dtolnay/rust-toolchain@stable` que escolhe o
+#      último stable — pin estrito quebraria o cache do action.
+#   2. SLSA L4 exige *reproducibilidade* — duas builds com a mesma
+#      versão devem produzir bytes idênticos. Stable em janela de 6
+#      semanas atende a propriedade desde que ambos runners
+#      sincronizem.
+#   3. Para release oficial (`release.yml`), o job de provenance
+#      registra `rustc --version` em metadata → auditável.
+#
+# Se um dia precisarmos pin estrito (e.g. evitar regressão de
+# performance entre minor versions do compiler), troque para algo
+# como `channel = "1.94.1"` E ajuste o action no CI para honrar.
+
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# Targets baixados sob demanda via `rustup target add` — não listamos
+# aqui para manter o pin enxuto. Os jobs do release.yml já fazem o
+# add explícito.
