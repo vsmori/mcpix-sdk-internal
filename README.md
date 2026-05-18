@@ -409,6 +409,8 @@ parágrafos "fora do escopo" pelos docs e resumos de sessão).
    exige app integrador real para ter ROI.
 9. **OID privado para SAN URI** (ADR 0008) — alternativa formal a
    `urn:mcpix:institution:`.
-10. **Demo web — modo timestamp quantizado** + persistência via
-    `LocalStorage` para mostrar replay cross-reload.
+10. **Demo web — LocalStorage persistência** (modo quantizado já
+    entregue em S23). Requer iteração sobre `InMemorySeedStore` que
+    o trait `SeedStore` não expõe hoje — extensão da trait + import/
+    export JSON.
 
