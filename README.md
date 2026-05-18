@@ -206,6 +206,20 @@ git commit -m "rotate release signing key"
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
 
+**Sessão 14** (revogação de certificados mTLS — CRL + OCSP stapling)
+- `ServerTlsConfig` (novo): builder com `with_client_crls(pem)` e
+  `with_stapled_ocsp(der)`. CRL valida client certs apresentados;
+  stapling anexa OCSP response ao server cert
+- `MtlsClientMaterial::with_server_crls(pem)`: cliente passa a usar
+  `rustls::ClientConfig` custom com `WebPkiServerVerifier` + CRLs,
+  rejeitando server certs revogados
+- CRL expirada (`nextUpdate` passado) ou com assinatura quebrada falha
+  no build do verifier — não há janela silenciosa
+- 3 testes E2E novos com CRL real gerada via rcgen: revogar client,
+  CRL vazia (não-falso-positivo), revogar server. Suite mTLS: 7 testes
+- Fecha `THREAT_MODEL.md` §6.5 (revogação); operacional em novo
+  `docs/MTLS_REVOCATION.md`
+
 **Sessão 13** (SLSA L3 supply-chain provenance)
 - `release.yml` ganha job `provenance` que invoca o reusable workflow
   oficial `slsa-framework/slsa-github-generator` em runner separado

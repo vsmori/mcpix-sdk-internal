@@ -15,15 +15,22 @@
 //! formato `urn:mcpix:institution:<id>` é estruturado, sem ambiguidade
 //! de hostname vs identity. Fallback para CN existe só para PKIs legadas.
 //!
-//! ## Limites
+//! ## Revogação (CRL / OCSP stapling)
 //!
-//! - Não fazemos revogação (OCSP/CRL) nesta sessão — a CA confiada é única
-//!   e a rotação se dá por re-emissão.
-//! - mTLS protege o canal e identifica peers. **Não** prova que o servidor
-//!   é a impl `BankReceiver` correta — isso continua sendo responsabilidade
-//!   da configuração da CA e do deploy.
+//! A SDK suporta **CRL** (Certificate Revocation List) tanto no servidor
+//! (revoga client certs) quanto no cliente (revoga server certs), e
+//! **OCSP stapling** server-side. Veja `mtls_server::ServerTlsConfig` e
+//! `MtlsClientMaterial::server_crls_pem`. Documentação operacional em
+//! `docs/MTLS_REVOCATION.md`.
+//!
+//! Limites:
+//! - **Não** fazemos *live* OCSP query — a SDK opera offline-friendly.
+//!   O operador é responsável por buscar e atualizar CRLs / OCSP
+//!   responses periodicamente.
+//! - CRLs expiradas (`nextUpdate` no passado) são rejeitadas pelo rustls
+//!   na construção do verifier — força rotação.
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::pki_types::{CertificateDer, CertificateRevocationListDer, PrivateKeyDer};
 use std::io::BufReader;
 
 use mcpix_core::error::McpixError;
@@ -53,6 +60,24 @@ pub fn load_private_key(pem: &[u8]) -> Result<PrivateKeyDer<'static>, McpixError
     rustls_pemfile::private_key(&mut rd)
         .map_err(|e| McpixError::Transport(format!("read key pem: {e}")))?
         .ok_or_else(|| McpixError::Transport("no private key found in pem".into()))
+}
+
+/// Lê CRLs (Certificate Revocation Lists) de um buffer PEM concatenado.
+///
+/// Aceita zero ou mais blocos `X509 CRL`. Retorna `Vec` vazio se o
+/// buffer for vazio (caso comum: caller ainda não configurou revogação).
+///
+/// O DER de cada CRL é validado em construção do verifier — assinatura
+/// quebrada / `nextUpdate` no passado / issuer desconhecido produzem
+/// erro nesse momento.
+pub fn load_crls(pem: &[u8]) -> Result<Vec<CertificateRevocationListDer<'static>>, McpixError> {
+    if pem.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut rd = BufReader::new(pem);
+    rustls_pemfile::crls(&mut rd)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| McpixError::Transport(format!("read crl pem: {e}")))
 }
 
 /// Extrai a identidade da instituição do certificado do cliente.

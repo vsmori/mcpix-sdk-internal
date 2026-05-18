@@ -213,9 +213,29 @@ do DER, retorna o ID estruturado. Fallback para CN.
 
 ### 6.5 Revogação
 
-**Limite atual.** Não há OCSP/CRL. Rotação de cert comprometido
-exige re-emissão pela CA e propagação manual aos peers. Próxima
-sessão de PKI completa.
+**Defesa.** *Endereçada.* A SDK aceita **CRL** (Certificate Revocation
+List) em ambos os sentidos do canal e **OCSP stapling** server-side:
+
+- `ServerTlsConfig::with_client_crls(pem)` — server rejeita client
+  certs revogados pela CA da federação.
+- `ServerTlsConfig::with_stapled_ocsp(der)` — server anexa OCSP
+  response da CA ao próprio cert; cliente com `WebPkiServerVerifier`
+  valida automaticamente.
+- `MtlsClientMaterial::with_server_crls(pem)` — cliente rejeita server
+  certs revogados, mesmo se assinados pela CA confiada.
+
+CRLs são validadas pelo rustls em construção do verifier: assinatura,
+janela `thisUpdate..nextUpdate`, issuer consistente — CRL expirada ou
+forjada quebra o build, forçando rotação operacional.
+
+Ancorado pelos testes `mtls_rejects_revoked_client_cert`,
+`mtls_accepts_non_revoked_client_when_crl_active` e
+`client_rejects_revoked_server_cert_via_crl` (gera CRL real via
+`rcgen`, observa rejeição no handshake TLS).
+
+Detalhes operacionais (refresh, distribuição, OCSP stapling) em
+[`MTLS_REVOCATION.md`](MTLS_REVOCATION.md). *Resíduo:* a SDK não faz
+live OCSP query — pull periódico é responsabilidade do operador.
 
 ## 7. Superfície de persistência
 
@@ -292,7 +312,7 @@ outro limite: cada `C₂` vale apenas dentro de seu quantum.
 | LD_PRELOAD / DLL hijack | **não coberto** | remote attestation |
 | Eavesdropping inter-bancos | coberto | — |
 | Impersonação de banco | coberto | — |
-| Cert revogado | **não coberto** | OCSP/CRL |
+| Cert revogado | coberto (CRL + OCSP stapling) | live OCSP query |
 | Vazamento de seed store | impl-dependente | integração Secure Element |
 | Persistência de retained em MCU | coberto (S11) | — |
 | Ataque físico ao dispositivo | impl-dependente | Secure Element |

@@ -43,3 +43,6 @@ x509-parser = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
 mcpix-bank-payer-mock = { workspace = true }
 rcgen = { workspace = true }
+# `time` é usada nos testes de CRL — rcgen 0.14 exige `OffsetDateTime`
+# para `this_update`/`next_update` mas não re-exporta o crate.
+time = "0.3"

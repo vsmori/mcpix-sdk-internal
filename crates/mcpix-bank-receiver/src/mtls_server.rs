@@ -23,7 +23,8 @@
 //!   sobre o cert recuperado de outras formas). Em produção, o termination
 //!   layer (envoy/nginx) propaga o cert via header `X-Forwarded-Client-Cert`
 //!   parseado por middleware — abordagem padrão e auditável.
-//! - Revogação (OCSP/CRL) — fica para sessão de PKI completa.
+//! - Live OCSP query — apenas stapling. Operador atualiza a OCSP response
+//!   carimbada periodicamente (cron + reload).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -35,24 +36,72 @@ use rustls::{RootCertStore, ServerConfig};
 use mcpix_core::error::McpixError;
 
 use crate::http_server::router;
-use crate::mtls::{load_cert_chain, load_private_key};
+use crate::mtls::{load_cert_chain, load_crls, load_private_key};
 use crate::BankReceiver;
 
-/// Constrói o `ServerConfig` rustls para mTLS:
-/// - apresenta `server_cert` + `server_key`
-/// - aceita apenas clientes com cert verificado contra `client_ca`
-pub fn build_server_config(
-    server_cert_pem: &[u8],
-    server_key_pem: &[u8],
-    client_ca_pem: &[u8],
-) -> Result<ServerConfig, McpixError> {
-    // `ring` é o provider crypto default; instalá-lo uma vez é idempotente
-    // (`install_default` retorna Err em subsequent calls — ignoramos).
+/// Configuração completa de TLS do servidor. Use o construtor
+/// [`ServerTlsConfig::new`] para os campos obrigatórios e os setters
+/// para revogação opcional.
+#[derive(Clone, Debug)]
+pub struct ServerTlsConfig<'a> {
+    /// Cert chain do servidor (apresentado ao cliente).
+    pub server_cert_pem: &'a [u8],
+    /// Chave privada do servidor (PKCS#8, RSA ou SEC1).
+    pub server_key_pem: &'a [u8],
+    /// CA que assinou os client certs aceitos.
+    pub client_ca_pem: &'a [u8],
+    /// CRLs PEM concatenadas usadas para revogar **client certs**.
+    /// Vazio = sem revogação (não recomendado em produção).
+    pub client_crls_pem: &'a [u8],
+    /// DER da OCSP response para stapling ao próprio cert do servidor.
+    /// Vazio = sem stapling. Operador deve atualizar periodicamente.
+    pub ocsp_response: &'a [u8],
+}
+
+impl<'a> ServerTlsConfig<'a> {
+    pub fn new(
+        server_cert_pem: &'a [u8],
+        server_key_pem: &'a [u8],
+        client_ca_pem: &'a [u8],
+    ) -> Self {
+        Self {
+            server_cert_pem,
+            server_key_pem,
+            client_ca_pem,
+            client_crls_pem: &[],
+            ocsp_response: &[],
+        }
+    }
+
+    pub fn with_client_crls(mut self, crls_pem: &'a [u8]) -> Self {
+        self.client_crls_pem = crls_pem;
+        self
+    }
+
+    pub fn with_stapled_ocsp(mut self, ocsp_der: &'a [u8]) -> Self {
+        self.ocsp_response = ocsp_der;
+        self
+    }
+}
+
+/// Constrói o `ServerConfig` rustls para mTLS com revogação opcional.
+///
+/// Se `cfg.client_crls_pem` for não-vazio, o verifier valida cada client
+/// cert apresentado contra as CRLs — cert revogado falha o handshake
+/// com `unknown_ca` no log do rustls.
+///
+/// Se `cfg.ocsp_response` for não-vazio, o servidor faz stapling
+/// (TLS Certificate Status Extension) anexando a resposta OCSP da CA
+/// para o próprio cert. Cliente que valida stapling (rustls default
+/// para clients com `WebPkiServerVerifier`) detecta revogação.
+pub fn build_server_config_full(cfg: &ServerTlsConfig<'_>) -> Result<ServerConfig, McpixError> {
+    // `ring` é o provider crypto default; instalá-lo uma vez é idempotente.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let server_chain = load_cert_chain(server_cert_pem)?;
-    let server_key = load_private_key(server_key_pem)?;
-    let client_ca_chain = load_cert_chain(client_ca_pem)?;
+    let server_chain = load_cert_chain(cfg.server_cert_pem)?;
+    let server_key = load_private_key(cfg.server_key_pem)?;
+    let client_ca_chain = load_cert_chain(cfg.client_ca_pem)?;
+    let client_crls = load_crls(cfg.client_crls_pem)?;
 
     let mut roots = RootCertStore::empty();
     for c in client_ca_chain {
@@ -60,14 +109,39 @@ pub fn build_server_config(
             .add(c)
             .map_err(|e| McpixError::Transport(format!("add CA: {e}")))?;
     }
-    let verifier = WebPkiClientVerifier::builder(Arc::new(roots))
-        .build()
-        .map_err(|e| McpixError::Transport(format!("client verifier: {e}")))?;
 
-    ServerConfig::builder()
-        .with_client_cert_verifier(verifier)
-        .with_single_cert(server_chain, server_key)
-        .map_err(|e| McpixError::Transport(format!("server cert: {e}")))
+    let verifier_builder = WebPkiClientVerifier::builder(Arc::new(roots));
+    let verifier = if client_crls.is_empty() {
+        verifier_builder.build()
+    } else {
+        verifier_builder.with_crls(client_crls).build()
+    }
+    .map_err(|e| McpixError::Transport(format!("client verifier: {e}")))?;
+
+    let builder = ServerConfig::builder().with_client_cert_verifier(verifier);
+
+    if cfg.ocsp_response.is_empty() {
+        builder
+            .with_single_cert(server_chain, server_key)
+            .map_err(|e| McpixError::Transport(format!("server cert: {e}")))
+    } else {
+        builder
+            .with_single_cert_with_ocsp(server_chain, server_key, cfg.ocsp_response.to_vec())
+            .map_err(|e| McpixError::Transport(format!("server cert + ocsp: {e}")))
+    }
+}
+
+/// Wrapper compat: equivalente a `build_server_config_full` com CRL/OCSP vazios.
+pub fn build_server_config(
+    server_cert_pem: &[u8],
+    server_key_pem: &[u8],
+    client_ca_pem: &[u8],
+) -> Result<ServerConfig, McpixError> {
+    build_server_config_full(&ServerTlsConfig::new(
+        server_cert_pem,
+        server_key_pem,
+        client_ca_pem,
+    ))
 }
 
 pub type ServerHandle = axum_server::Handle<SocketAddr>;
