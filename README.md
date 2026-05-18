@@ -365,8 +365,40 @@ git commit -m "rotate release signing key"
 - Para ESP8266 Xtensa: SDK porta tal qual; ponto crítico é a toolchain
   (fork Espressif via `espup install`).
 
-## Próximas sessões
+## Backlog
 
-1. Remote attestation/TEE para defesa contra LD_PRELOAD e DLL hijacking
-2. SLSA L3+ build provenance (sigstore + transparency log)
-3. Testes integrados Android (instrumented) e iOS (XCUITest)
+Curadoria do que está explicitamente diferido (referência: `docs/THREAT_MODEL.md` §9,
+parágrafos "fora do escopo" pelos docs e resumos de sessão).
+
+### Threat model gaps (não cobertos)
+
+1. **LD_PRELOAD / DLL hijacking** (THREAT_MODEL §5.4) — mitigação via
+   remote attestation / TEE (Secure Enclave iOS, StrongBox Android, TPM
+   desktop). Depende de capacidade da plataforma; não é SDK puro.
+2. **Vazamento de `SeedStore` local** (§7.1, impl-dependente) —
+   integração com Secure Element para a Seed nunca tocar memória
+   user-space.
+
+### Resíduos (cobertos, com parcela diferida)
+
+3. **SLSA L4 hermético** (§5.3 / `docs/SLSA.md`) — `cargo --offline`,
+   auditoria de `build.rs` não-determinísticos, comparação cross-runner.
+4. **Live OCSP query** (§6.5 / `docs/MTLS_REVOCATION.md`) — hoje só
+   stapling; cliente fazer OCSP request a cada handshake é incremento.
+5. **Anti-replay de backup** (`mcpix-backup/src/lib.rs`) — protocolo
+   institucional para invalidar backup antigo no banco recebedor antes
+   de aceitar device novo.
+
+### Qualidade / DX
+
+6. **Capability negotiation inter-bancos** — `BankReceiver::supported_versions()`
+   exposto via API HTTP; infra do `ProtocolVersion::all()` pronta desde S16.
+7. **Corpus de fuzz versionado** — `fuzz.yml` roda mas corpus
+   regressivo não está em git; achados anteriores deveriam virar testes.
+8. **Testes instrumented Android (Espresso) + iOS (XCUITest)** —
+   exige app integrador real para ter ROI.
+9. **OID privado para SAN URI** (ADR 0008) — alternativa formal a
+   `urn:mcpix:institution:`.
+10. **Demo web — modo timestamp quantizado** + persistência via
+    `LocalStorage` para mostrar replay cross-reload.
+
