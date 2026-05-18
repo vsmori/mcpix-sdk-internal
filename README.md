@@ -81,6 +81,36 @@ cargo xtask gen-release-key       # gera novo par Ed25519 (uma vez por rotação
 MCPIX_SIGN_PRIVKEY_HEX=<hex> cargo xtask sign-artifacts  # gera SHA256SUMS.sig
 ```
 
+## Builds sob demanda no GitHub Actions
+
+Existem duas pipelines de artefato no `.github/workflows/`:
+
+| Workflow | Trigger | Saída |
+|---|---|---|
+| `release.yml` | push de tag `v*` | GitHub Release oficial assinado |
+| `build.yml`   | `workflow_dispatch` (manual) | Artefatos GHA com label `<versão>-<sha>` |
+
+Use `build.yml` quando precisar do `.so / .dll / .aar / .nupkg / .xcframework`
+de um commit qualquer sem criar release. Disparo via `gh`:
+
+```bash
+# Tudo + SLSA provenance (default)
+gh workflow run build.yml -f target=all -f provenance=true
+
+# Só o .aar de Android (rápido, só roda o que importa)
+gh workflow run build.yml -f target=aar -f provenance=true
+
+# Linux .so sem provenance (debug iteration)
+gh workflow run build.yml -f target=linux -f provenance=false -f retention_days=7
+```
+
+Alvos disponíveis: `all`, `linux`, `windows`, `android`, `ios`, `aar`,
+`nuget`. Cada um arrasta exatamente as dependências mínimas (e.g.
+`aar` puxa `android`; `nuget` puxa `linux`+`windows`). Provenance é
+keyless via Sigstore Fulcio + Rekor (mesma cadeia do `release.yml`,
+documentada em `docs/SLSA.md`).
+
+
 ## Self-check de integridade (S3 + S4)
 
 Duas camadas de defesa:
