@@ -1,0 +1,201 @@
+# SLSA L4 step 2: build em dois runners independentes e compara hashes.
+#
+# Objetivo: provar que dois runners GHA, dado o mesmo commit + mesma
+# toolchain + mesmas deps vendored, produzem **bytes idênticos** no
+# artefato final (`libmcpix_ffi.so`). Sem essa propriedade, um
+# integrador que rebuilda localmente não consegue confirmar que o
+# binário publicado bate com o código auditado.
+#
+# Diferença vs `release.yml` (SLSA L3):
+#   - Release.yml prova "este binário veio deste workflow + commit"
+#     via attestation Sigstore.
+#   - Reproducibility.yml prova "este binário pode ser reconstruído
+#     bytewise por qualquer um".
+#   - Juntos: L3 + reprodutibilidade = consumidor rebuilda → confere
+#     com hash do .intoto.jsonl → confiança transitiva.
+#
+# Phase atual: só `libmcpix_ffi.so` Linux x86_64. Razão: tarballs
+# (AAR, NuGet) embedam timestamps que exigem `SOURCE_DATE_EPOCH`
+# uniforme — endereçar em phase seguinte.
+
+name: reproducibility (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_variant:
+        description: 'Variante do segundo runner (controle de variável)'
+        required: true
+        type: choice
+        default: same
+        options:
+          # Default: dois ubuntu-latest. Prova reprodutibilidade no
+          # caso esperado em CI.
+          - same
+          # Cross-version Ubuntu: 22 vs 24. Detecta se mudanças no
+          # sysroot afetam o output. Sinal mais útil para futuras
+          # atualizações de runner image.
+          - cross-ubuntu-version
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Determinismo extra para timestamps embedados em artefatos:
+  # SOURCE_DATE_EPOCH é o env var convencional para builds
+  # reproduzíveis. Define para o commit's authordate.
+  # Tools-aware do contrato: tar/zip/cargo (via -Ztime-passes
+  # silencia, mas é minor), e qualquer build.rs do dep graph que
+  # honre.
+  SOURCE_DATE_EPOCH: "0"
+
+jobs:
+  meta:
+    name: capture commit metadata
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.s.outputs.sha }}
+      author_epoch: ${{ steps.s.outputs.epoch }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: s
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          epoch=$(git show -s --format=%ct HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "epoch=$epoch" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Reproducibility target::commit $sha (epoch $epoch)"
+
+  build:
+    name: hermetic build (${{ matrix.runner }})
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        # Sempre rodamos 2 jobs. No modo `same`, ambos em
+        # ubuntu-latest. No modo `cross-ubuntu-version`, um em 22 e
+        # outro em 24 para sinalizar drift entre as imagens do GHA.
+        include:
+          - runner: ubuntu-latest
+            label: A
+          - runner: ${{ github.event.inputs.runner_variant == 'cross-ubuntu-version' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+            label: B
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pin no SHA capturado em `meta` — paranoid mas garante que
+          # commits ao branch entre o disparo e o run das matrices
+          # não introduzam diferenças.
+          ref: ${{ needs.meta.outputs.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: print toolchain + env
+        # Documentação operacional: se os hashes divergirem, o log de
+        # cada runner mostra exatamente quais versões estavam em uso.
+        run: |
+          rustc --version
+          cargo --version
+          uname -a
+          dpkg -l libc6 binutils gcc | tail -5 || true
+
+      - name: build hermético
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.author_epoch }}
+        run: |
+          # Mesmo flow do xtask verify-hermetic, mas inline aqui para
+          # que a CI log mostre cada passo.
+          cargo vendor --locked vendor > .cargo/config.hermetic.toml
+          cargo build \
+            --release \
+            --target x86_64-unknown-linux-gnu \
+            --frozen --locked --offline \
+            --config "include=[\".cargo/config.hermetic.toml\"]" \
+            -p mcpix-ffi
+
+      - name: hash artifact
+        id: h
+        shell: bash
+        run: |
+          set -euo pipefail
+          art=target/x86_64-unknown-linux-gnu/release/libmcpix_ffi.so
+          test -f "$art" || { echo "::error::artifact not found: $art"; exit 1; }
+          sha=$(sha256sum "$art" | awk '{print $1}')
+          size=$(stat -c%s "$art")
+          echo "::notice title=Runner ${{ matrix.label }} (${{ matrix.runner }})::sha256=$sha size=$size"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.label }}
+          path: target/x86_64-unknown-linux-gnu/release/libmcpix_ffi.so
+          retention-days: 7
+
+      - name: write hash to outputs
+        # Workflow-level outputs precisam ser scoped por job; usamos
+        # artifacts para passar para o `compare` job sem race.
+        run: |
+          mkdir -p hashes
+          echo "${{ steps.h.outputs.sha }}" > hashes/sha.txt
+          echo "${{ steps.h.outputs.size }}" > hashes/size.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.label }}
+          path: hashes/
+          retention-days: 7
+
+  compare:
+    name: compare hashes
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+          path: hashes/
+
+      - name: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          a=$(cat hashes/hash-A/sha.txt)
+          b=$(cat hashes/hash-B/sha.txt)
+          size_a=$(cat hashes/hash-A/size.txt)
+          size_b=$(cat hashes/hash-B/size.txt)
+
+          echo "Runner A: sha=$a size=$size_a"
+          echo "Runner B: sha=$b size=$size_b"
+
+          if [ "$a" = "$b" ]; then
+            echo "::notice title=Reproducibility OK::libmcpix_ffi.so byte-idêntico nos dois runners"
+            exit 0
+          fi
+          echo "::error title=Reproducibility FAIL::hashes diferem — build não é reproduzível"
+          echo "  Inspecione: actions/upload-artifact build-A e build-B"
+          echo "  Diff binário típico: timestamps em ar headers, build IDs"
+          echo "  Próximo passo: docs/SLSA_L4_PROGRESS.md cataloga build.rs suspeitos"
+          exit 1
+
+      - name: download artifacts for forensics on mismatch
+        if: failure()
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-*
+          path: artifacts/
+
+      - name: diff binário (só roda em falha)
+        if: failure()
+        shell: bash
+        run: |
+          # `diffoscope` é a ferramenta padrão para investigar
+          # divergências em builds reproduzíveis. Disponível na image
+          # GHA via apt.
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends diffoscope
+          diffoscope --text-color=never artifacts/build-A/libmcpix_ffi.so artifacts/build-B/libmcpix_ffi.so | head -200 || true

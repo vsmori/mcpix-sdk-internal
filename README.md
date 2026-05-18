@@ -387,8 +387,10 @@ parágrafos "fora do escopo" pelos docs e resumos de sessão).
 
 3. **SLSA L4 hermético** (§5.3 / `docs/SLSA.md` / `docs/SLSA_L4_PROGRESS.md`) —
    `xtask verify-hermetic` + toolchain pinada + catálogo de `build.rs`
-   prontos. Falta: CI rotineiro do hermetic build, cross-runner hash
-   comparison, audit crate-a-crate da Categoria C.
+   + `reproducibility.yml` (cross-runner hash compare via `workflow_dispatch`)
+   prontos. Falta: CI rotineiro do hermetic build no `release.yml`,
+   schedule periódico do `reproducibility.yml`, audit crate-a-crate
+   da Categoria C, e tarball-determinismo para AAR/NuGet.
 4. **Live OCSP query (Phase 1)** (§6.5 / `docs/MTLS_REVOCATION.md`) —
    request builder + parser + transport + 9 testes prontos. Falta
    Phase 2: verificação criptográfica da assinatura da OcspResponse

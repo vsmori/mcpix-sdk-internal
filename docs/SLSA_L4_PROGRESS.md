@@ -19,8 +19,8 @@ investigar.
 | `Cargo.lock` versionada | ✅ pronto | `/Cargo.lock` no root do workspace |
 | Build offline reproduzível | 🟡 ferramenta pronta, falta CI rotineiro | `cargo xtask verify-hermetic` |
 | Catalogação de `build.rs` na dep tree | 🟡 inventário feito (abaixo); não-determinismos não auditados crate a crate | esta seção |
-| Cross-runner hash comparison | ❌ não implementado | roadmap |
-| Reproducibilidade de timestamps em artefatos | ❌ não implementado | roadmap (`SOURCE_DATE_EPOCH`) |
+| Cross-runner hash comparison | 🟡 workflow pronto (manual) | `.github/workflows/reproducibility.yml` |
+| Reproducibilidade de timestamps em artefatos | 🟡 `SOURCE_DATE_EPOCH` plumbed para `cargo build` | reproducibility.yml expõe via env |
 
 ## Como rodar o build hermético localmente
 
@@ -102,13 +102,19 @@ for pinada. **Não pinada hoje** — gap conhecido.
    hermético. Falha se algum dep mudou e o vendor ficou stale.
 2. **Pin do `cc` toolchain** no `release.yml` via container image
    ou step explícito (`apt-get install -y g++=...`).
+3. **Executar `reproducibility.yml` periodicamente** (e.g. agendado
+   semanal). O workflow existe em modo `workflow_dispatch` — para
+   se tornar gate, basta adicionar `schedule:` ou exigir success no
+   PR (custo: ~10min de CI por execução).
 
 ### Médio prazo (sessão dedicada)
 
-3. **Cross-runner hash comparison**: novo workflow que faz dois
-   runs paralelos do build em runners diferentes (ubuntu-latest A
-   e B) e compara `sha256sum` de cada artefato. Falha se diferir.
-   Pode iniciar com `linux-x86_64.so` apenas.
+3. ~~**Cross-runner hash comparison**~~: **entregue** como
+   `reproducibility.yml`. Dois runners (`same` ou
+   `cross-ubuntu-version`) compilam `libmcpix_ffi.so` e comparam
+   sha256. Em falha, roda `diffoscope` para identificar a fonte do
+   divergir. Escopo atual: só Linux x86_64; AAR/NuGet exigem
+   tarball-determinismo separado.
 4. **`SOURCE_DATE_EPOCH`** universal: definir env var no CI para
    que tar/zip embebidos (AAR/NuGet) usem timestamp determinístico
    em vez do clock do runner.
