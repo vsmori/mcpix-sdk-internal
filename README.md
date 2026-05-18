@@ -375,9 +375,13 @@ parágrafos "fora do escopo" pelos docs e resumos de sessão).
 1. **LD_PRELOAD / DLL hijacking** (THREAT_MODEL §5.4) — mitigação via
    remote attestation / TEE (Secure Enclave iOS, StrongBox Android, TPM
    desktop). Depende de capacidade da plataforma; não é SDK puro.
-2. **Vazamento de `SeedStore` local** (§7.1, impl-dependente) —
-   integração com Secure Element para a Seed nunca tocar memória
-   user-space.
+
+### Contratos prontos, integração hw real pendente
+
+2. **`SeedSealer` para Secure Element** (§7.1) — trait + `SealedInMemorySeedStore`
+   + mock `ChaChaSealer` + 7 testes de invariante prontos. Falta plugar
+   iOS Secure Enclave, Android StrongBox, TPM 2.0 — esqueletos em
+   `docs/SECURE_ELEMENT.md`. Exige device físico para validar.
 
 ### Resíduos (cobertos, com parcela diferida)
 

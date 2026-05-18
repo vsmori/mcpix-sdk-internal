@@ -9,6 +9,9 @@ publish.workspace = true
 [features]
 default = []
 sqlite = ["dep:rusqlite"]
+# Sealing AEAD para SealedSeedStore. ChaCha20-Poly1305 já está no
+# workspace por causa de mcpix-backup (S12); aqui o reuso é gratuito.
+sealed-store = ["dep:chacha20poly1305"]
 
 [dependencies]
 mcpix-core.workspace = true
@@ -16,6 +19,7 @@ parking_lot.workspace = true
 rand_core.workspace = true
 thiserror.workspace = true
 rusqlite = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
 
 [dev-dependencies]
 sha2 = { workspace = true }

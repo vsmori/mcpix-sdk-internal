@@ -17,6 +17,9 @@ pub mod timestamp_counter;
 #[cfg(feature = "sqlite")]
 pub mod sqlite_store;
 
+#[cfg(feature = "sealed-store")]
+pub mod sealed_store;
+
 use std::sync::Arc;
 
 use mcpix_core::error::McpixError;

@@ -244,10 +244,26 @@ live OCSP query — pull periódico é responsabilidade do operador.
 **Ataque.** Adversário com acesso ao dispositivo lê o store local
 (SQLite, KeyChain, EEPROM) e extrai todas as sementes.
 
-**Defesa.** Trait `SeedStore` foi desenhada para que a impl em
-produção encapsule Secure Enclave (iOS) / Keystore (Android) /
-TPM (PC). Material nunca atravessa userland em prod. A impl in-memory
-para demo *não* fornece essa garantia (e está documentado).
+**Defesa.** *Contrato pronto — impl hw-bound depende da plataforma.*
+A SDK introduziu:
+
+- Trait `mcpix_core::traits::SeedSealer` (seal/unseal/attestation)
+  como ponto de plugagem para Secure Enclave (iOS) / StrongBox
+  (Android) / TPM 2.0 (desktop).
+- `SealedInMemorySeedStore<W: SeedSealer>` em `mcpix-receiver-sdk`
+  que implementa `SeedStore` e garante que a Seed **nunca** entra
+  no backing store em claro.
+- `ChaChaSealer` como mock de referência (chave em RAM — **não
+  usar em produção**), validando o pattern com 7 testes; o crucial
+  é `sealed_blob_does_not_contain_plaintext_seed`, que ancora a
+  invariante "blob persistido não contém os 32 bytes da Seed em
+  sequência".
+
+Snippets de integração iOS Secure Enclave, Android StrongBox e
+TPM 2.0 (com chaves nunca saindo do silício) em
+[`SECURE_ELEMENT.md`](SECURE_ELEMENT.md). *Resíduo:* impls
+hardware-real exigem device de validação — esqueleto Rust + Swift/
+Kotlin/TPM pseudocode está documentado.
 
 ### 7.2 Persistência de C₂ em microcontrolador
 
@@ -313,6 +329,6 @@ outro limite: cada `C₂` vale apenas dentro de seu quantum.
 | Eavesdropping inter-bancos | coberto | — |
 | Impersonação de banco | coberto | — |
 | Cert revogado | coberto (CRL + OCSP stapling) | live OCSP query |
-| Vazamento de seed store | impl-dependente | integração Secure Element |
+| Vazamento de seed store | contrato pronto (`SeedSealer` + `SealedInMemorySeedStore`) | impl hw-bound por plataforma (`docs/SECURE_ELEMENT.md`) |
 | Persistência de retained em MCU | coberto (S11) | — |
 | Ataque físico ao dispositivo | impl-dependente | Secure Element |

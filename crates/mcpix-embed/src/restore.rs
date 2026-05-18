@@ -104,7 +104,7 @@ pub fn import(text: &str, passphrase: &[u8]) -> Result<RestoredState, RestoreErr
     let header: &[u8; HEADER_LEN] = blob[..HEADER_LEN]
         .try_into()
         .map_err(|_| RestoreError::Malformed)?;
-    let (m_cost_kib, t_cost, p_cost, salt, nonce_bytes) = parse_header(header)?;
+    let HeaderFields { m_cost_kib, t_cost, p_cost, salt, nonce_bytes } = parse_header(header)?;
 
     // 3. KDF.
     let mut key_bytes = [0u8; 32];
@@ -140,7 +140,15 @@ pub fn import(text: &str, passphrase: &[u8]) -> Result<RestoredState, RestoreErr
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn parse_header(buf: &[u8; HEADER_LEN]) -> Result<(u32, u32, u8, [u8; 16], [u8; 12]), RestoreError> {
+struct HeaderFields {
+    m_cost_kib: u32,
+    t_cost: u32,
+    p_cost: u8,
+    salt: [u8; 16],
+    nonce_bytes: [u8; 12],
+}
+
+fn parse_header(buf: &[u8; HEADER_LEN]) -> Result<HeaderFields, RestoreError> {
     if buf[0..4] != MAGIC {
         return Err(RestoreError::Malformed);
     }
@@ -156,9 +164,9 @@ fn parse_header(buf: &[u8; HEADER_LEN]) -> Result<(u32, u32, u8, [u8; 16], [u8; 
     let p_cost = buf[15];
     let mut salt = [0u8; 16];
     salt.copy_from_slice(&buf[19..35]);
-    let mut nonce = [0u8; 12];
-    nonce.copy_from_slice(&buf[35..47]);
-    Ok((m_cost_kib, t_cost, p_cost, salt, nonce))
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes.copy_from_slice(&buf[35..47]);
+    Ok(HeaderFields { m_cost_kib, t_cost, p_cost, salt, nonce_bytes })
 }
 
 fn derive_argon2id(

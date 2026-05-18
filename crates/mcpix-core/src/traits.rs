@@ -78,3 +78,49 @@ pub struct RawResponse {
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
 }
+
+/// Sela / dessela uma `Seed` com material custodiado em hardware seguro.
+///
+/// **Modelo de uso.** O `SeedStore` da SDK persiste `Seed` em claro;
+/// o threat model (§7.1) marca isso como impl-dependente. Integradores
+/// que queiram fechar esse gap envelopam o store com um `SealedSeedStore`
+/// (ver `mcpix-receiver-sdk::sealed_store`), que delega o
+/// "selo criptográfico" a esta trait. A chave usada para selar **deve
+/// viver no hardware seguro**:
+///
+/// - iOS: chave gerada com `kSecAttrAccessControlPrivateKeyUsage` no
+///   Secure Enclave; operações de seal/unseal invocam `SecKeyEncrypt`.
+/// - Android: chave `KeyGenParameterSpec` com `setIsStrongBoxBacked(true)`
+///   no Keystore; operações via `Cipher.getInstance("AES/GCM/...")`.
+/// - Desktop (Linux/Windows/macOS): TPM 2.0 via `tpm2-tss`, derivando a
+///   chave de um Endorsement Hierarchy template.
+///
+/// **Atestation** (opcional) prova ao verificador externo que a chave
+/// efetivamente vive no hardware (Apple App Attest, Android Key
+/// Attestation chain, TPM Quote). Retornar `Ok(None)` é OK para impls
+/// puramente locais que não publicam essa garantia.
+///
+/// **Por que separar de `SeedStore`.** A camada de persistência
+/// (filesystem, SQLite, Keychain) é ortogonal à camada de cripto-selo.
+/// Um integrador que use SQLite + iOS Keychain compõe os dois traits;
+/// outro que use só TPM + memória usa só o sealer. Manter
+/// responsabilidades distintas evita acoplar impls.
+pub trait SeedSealer: Send + Sync {
+    /// Sela `plain` produzindo um blob opaco que somente este mesmo
+    /// sealer (com acesso ao material hw-bound) consegue desselar.
+    /// O blob inclui o nonce/IV — chamadas sucessivas com a mesma
+    /// `Seed` produzem outputs diferentes (não-determinístico).
+    fn seal(&self, plain: &Seed) -> Result<Vec<u8>, McpixError>;
+
+    /// Inverte o seal. Tampering no blob (1 bit flipado) é detectado
+    /// pelo AEAD subjacente e retorna erro. Diferença de chave entre
+    /// a usada para selar e a usada para desselar idem.
+    fn unseal(&self, blob: &[u8]) -> Result<Seed, McpixError>;
+
+    /// Devolve atestação opcional do hardware que custodia a chave.
+    /// Default `Ok(None)` para impls que não publicam essa garantia
+    /// (mocks, TPM sem CA confiada, etc).
+    fn attestation(&self) -> Result<Option<Vec<u8>>, McpixError> {
+        Ok(None)
+    }
+}
