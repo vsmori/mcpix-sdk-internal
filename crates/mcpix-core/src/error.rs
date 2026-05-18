@@ -13,6 +13,9 @@ pub enum McpixError {
     #[error("transport field prefix does not match expected scheme")]
     TransportFieldPrefix,
 
+    #[error("transport field carries unsupported protocol version: '{0}' — atualize a SDK")]
+    UnsupportedProtocolVersion(String),
+
     #[error("seed id has invalid length: expected up to {max}, got {got}")]
     SeedIdLength { max: usize, got: usize },
 

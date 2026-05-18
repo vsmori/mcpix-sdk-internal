@@ -17,6 +17,8 @@ pub mod state;
 pub mod traits;
 pub mod transport_field;
 pub mod types;
+pub mod version;
 
 pub use error::McpixError;
 pub use types::{C1, C2, Charge, ConfirmationCode, RetainedReceipt, Seed, SeedId};
+pub use version::ProtocolVersion;

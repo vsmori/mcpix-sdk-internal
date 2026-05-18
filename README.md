@@ -206,6 +206,27 @@ git commit -m "rotate release signing key"
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
 
+**Sessão 16** (versionamento do protocolo)
+- Novo módulo `mcpix_core::version` com enum `ProtocolVersion` (`V1 = 1`)
+  + `detect()` + `is_any_version()`; constantes `PROTOCOL_PREFIX_FAMILY`
+  e `PROTOCOL_PREFIX_LEN` centralizadas
+- `transport_field::parse` dispatcha por versão antes do parsing
+  posicional — versão desconhecida nunca é interpretada com regras de
+  outra versão
+- Novo erro `McpixError::UnsupportedProtocolVersion(String)` distingue
+  "SDK desatualizado" (prefixo `PIXOFFv*` futuro) de "não é nosso
+  protocolo" (prefixo fora da família). FFI status code = 15
+- `ParsedField` ganha `version: ProtocolVersion`; `encode_with_version()`
+  permite emissão explícita (default fica em `current() = V1`)
+- Estrutura aditiva: introduzir V2 é um arquivo paralelo `parse_v2` e
+  uma variante no enum — código V1 nunca precisa mudar
+- 14 testes novos (8 em version.rs, 4 em transport_field.rs, mais
+  invariantes ABI ancorados) — total 101 testes default
+- Bindings C/C# atualizados; uniffi mapeia `UnsupportedProtocolVersion`
+  → `TransportField` (compat de assinatura)
+- Política completa em `docs/VERSIONING.md`: triggers de bump, janela
+  de coexistência ≥18 meses, ABI invariants imutáveis
+
 **Sessão 15** (demo browser via WebAssembly)
 - Nova crate `mcpix-wasm` com bindings `wasm-bindgen` cobrindo ambos os
   lados do protocolo num único módulo wasm de ~80 KB

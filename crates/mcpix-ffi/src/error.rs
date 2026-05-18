@@ -24,6 +24,7 @@ pub enum McpixStatus {
     Mismatch = 12,
     Storage = 13,
     Transport = 14,
+    UnsupportedProtocolVersion = 15,
     Panic = 98,
     Unknown = 99,
 }
@@ -46,6 +47,7 @@ impl From<&McpixError> for McpixStatus {
             McpixError::Mismatch => McpixStatus::Mismatch,
             McpixError::Storage(_) => McpixStatus::Storage,
             McpixError::Transport(_) => McpixStatus::Transport,
+            McpixError::UnsupportedProtocolVersion(_) => McpixStatus::UnsupportedProtocolVersion,
         }
     }
 }

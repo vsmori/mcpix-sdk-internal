@@ -16,9 +16,12 @@
 
 use crate::error::McpixError;
 use crate::types::{C1, C1_TRANSPORT_LEN, SEED_ID_MAX_LEN, SeedId};
+use crate::version::{self, ProtocolVersion, PROTOCOL_PREFIX_LEN};
 
+/// Prefixo da versão **atual** emitida por encode. Mantido por
+/// compat — call sites antigos usam `PROTOCOL_PREFIX` como constante;
+/// equivale a `ProtocolVersion::current().prefix()`.
 pub const PROTOCOL_PREFIX: &str = "PIXOFFv1";
-pub const PROTOCOL_PREFIX_LEN: usize = 8;
 pub const TRANSPORT_FIELD_LEN: usize = PROTOCOL_PREFIX_LEN + SEED_ID_MAX_LEN + C1_TRANSPORT_LEN;
 
 const SEED_ID_PAD: u8 = b'0';
@@ -27,12 +30,25 @@ const SEED_ID_PAD: u8 = b'0';
 pub struct ParsedField {
     pub seed_id: SeedId,
     pub c1: C1,
+    /// Versão detectada no prefixo do campo. Para v1 sempre
+    /// `ProtocolVersion::V1`; quando v2 existir, este enum diferencia
+    /// downstream sem que o caller precise reparsear.
+    pub version: ProtocolVersion,
 }
 
-/// Serializa `(seed_id, c1)` no campo de transporte público.
+/// Serializa `(seed_id, c1)` no campo de transporte público da versão
+/// **atual** (`ProtocolVersion::current()`). Para emitir em uma versão
+/// específica use [`encode_with_version`].
 pub fn encode(seed_id: &SeedId, c1: &C1) -> String {
+    encode_with_version(seed_id, c1, ProtocolVersion::current())
+}
+
+/// Como `encode`, mas com escolha explícita da versão. Em prática só
+/// é útil para roundtrip-test cruzando versões — produção usa
+/// `encode` que sempre carimba a versão default do build.
+pub fn encode_with_version(seed_id: &SeedId, c1: &C1, version: ProtocolVersion) -> String {
     let mut out = String::with_capacity(TRANSPORT_FIELD_LEN);
-    out.push_str(PROTOCOL_PREFIX);
+    out.push_str(version.prefix());
     out.push_str(seed_id.as_str());
     // Padding até completar SEED_ID_MAX_LEN. Sem isso a parsing por posição falha
     // quando o SeedId for mais curto que o slot reservado.
@@ -44,27 +60,43 @@ pub fn encode(seed_id: &SeedId, c1: &C1) -> String {
     out
 }
 
-/// Faz parse e valida o campo de transporte. Retorna `(SeedId, C₁)` extraídos.
+/// Faz parse e valida o campo de transporte. Dispatcha por versão
+/// antes do parsing posicional — versão desconhecida nunca é
+/// interpretada com regras de outra versão.
+///
+/// Erros relevantes:
+/// - [`McpixError::TransportFieldLength`] — comprimento fora de 26..=35
+///   ou diferente do layout esperado da versão detectada.
+/// - [`McpixError::TransportFieldCharset`] — byte não-alfanumérico.
+/// - [`McpixError::UnsupportedProtocolVersion`] — prefixo `PIXOFFv*`
+///   mas N desconhecido deste build.
+/// - [`McpixError::TransportFieldPrefix`] — prefixo não pertence à
+///   família.
 pub fn parse(field: &str) -> Result<ParsedField, McpixError> {
     let len = field.len();
     if !(26..=35).contains(&len) {
         return Err(McpixError::TransportFieldLength(len));
     }
-    // Garantia universal antes do parsing por posição: o campo inteiro só pode
-    // conter [a-zA-Z0-9]. Falhar cedo evita interpretar lixo binário como SeedId.
+    // Charset gate antes do dispatch: previne `UnsupportedProtocolVersion`
+    // contendo bytes não-ASCII no payload de erro, e antecipa rejeição
+    // de lixo binário travestido de PIXOFFv*.
     for (i, b) in field.bytes().enumerate() {
         if !b.is_ascii_alphanumeric() {
             return Err(McpixError::TransportFieldCharset(i));
         }
     }
-    if len != TRANSPORT_FIELD_LEN {
-        // Layout v1 é fixo em 35; faixa 26-35 é a janela do protocolo público,
-        // não da nossa versão. Outras versões usariam outro PROTOCOL_PREFIX.
-        return Err(McpixError::TransportFieldLength(len));
+    // Dispatch por versão. Cada versão tem seu próprio parser
+    // posicional; aqui só V1 existe.
+    match version::detect(field)? {
+        ProtocolVersion::V1 => parse_v1(field),
     }
-    if !field.starts_with(PROTOCOL_PREFIX) {
-        return Err(McpixError::TransportFieldPrefix);
+}
+
+fn parse_v1(field: &str) -> Result<ParsedField, McpixError> {
+    if field.len() != TRANSPORT_FIELD_LEN {
+        return Err(McpixError::TransportFieldLength(field.len()));
     }
+    // Prefixo já validado por `version::detect`.
 
     let seed_id_slot = &field[PROTOCOL_PREFIX_LEN..PROTOCOL_PREFIX_LEN + SEED_ID_MAX_LEN];
     let seed_id_str = seed_id_slot.trim_end_matches(SEED_ID_PAD as char);
@@ -75,11 +107,16 @@ pub fn parse(field: &str) -> Result<ParsedField, McpixError> {
     c1_bytes.copy_from_slice(c1_slot.as_bytes());
     let c1 = C1(c1_bytes);
 
-    Ok(ParsedField { seed_id, c1 })
+    Ok(ParsedField {
+        seed_id,
+        c1,
+        version: ProtocolVersion::V1,
+    })
 }
 
-/// Detecta se uma string carrega o nosso esquema. Usado pelo banco do pagador
-/// como triagem rápida antes do parse completo.
+/// Detecta se uma string é da **versão atual** do nosso esquema.
+/// Mantido por compat com call sites legados. Para triage que aceita
+/// versões futuras desconhecidas use [`crate::version::is_any_version`].
 pub fn is_protocol_field(field: &str) -> bool {
     field.len() == TRANSPORT_FIELD_LEN && field.starts_with(PROTOCOL_PREFIX)
 }
@@ -89,6 +126,7 @@ mod tests {
     use super::*;
     use crate::crypto::derive_pair;
     use crate::types::Seed;
+    use crate::version::ProtocolVersion;
 
     fn sample_seed_id() -> SeedId {
         SeedId::new("RECVR1").unwrap()
@@ -155,6 +193,54 @@ mod tests {
     fn seed_id_with_zero_is_rejected() {
         assert!(SeedId::new("R10").is_err());
         assert!(SeedId::new("R01").is_err());
+    }
+
+    #[test]
+    fn parse_unknown_version_reports_unsupported_not_prefix() {
+        // Campo bem-formado em comprimento e charset, com prefixo
+        // PIXOFFv2 que este build não conhece. Deve sair como
+        // UnsupportedProtocolVersion, não como TransportFieldPrefix —
+        // permite UX clara ("atualize seu SDK").
+        let mut s = String::from("PIXOFFv2");
+        s.push_str("RECVR000000000000"); // 17 chars de slot SeedId pad
+        s.truncate(PROTOCOL_PREFIX_LEN + SEED_ID_MAX_LEN); // 24
+        while s.len() < TRANSPORT_FIELD_LEN {
+            s.push('A');
+        }
+        assert_eq!(s.len(), TRANSPORT_FIELD_LEN);
+        match parse(&s) {
+            Err(McpixError::UnsupportedProtocolVersion(p)) => assert_eq!(p, "PIXOFFv2"),
+            other => panic!("expected UnsupportedProtocolVersion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_distinguishes_foreign_scheme_from_future_version() {
+        // Charset OK e comprimento OK, mas prefixo nem é PIXOFFv*.
+        // Deve ser TransportFieldPrefix, separável do caso v2 acima.
+        let mut s = String::from("OTHERSCH");
+        while s.len() < TRANSPORT_FIELD_LEN {
+            s.push('A');
+        }
+        assert_eq!(parse(&s).unwrap_err(), McpixError::TransportFieldPrefix);
+    }
+
+    #[test]
+    fn parsed_field_carries_version() {
+        let seed = Seed::from_bytes([0x42; 32]);
+        let (c1, _) = derive_pair(&seed, 1);
+        let field = encode(&sample_seed_id(), &c1);
+        let parsed = parse(&field).unwrap();
+        assert_eq!(parsed.version, ProtocolVersion::V1);
+    }
+
+    #[test]
+    fn encode_with_explicit_version_matches_default() {
+        // V1 é a default — encode_with_version(_, V1) ≡ encode(_).
+        let seed = Seed::from_bytes([0x33; 32]);
+        let (c1, _) = derive_pair(&seed, 7);
+        let sid = sample_seed_id();
+        assert_eq!(encode(&sid, &c1), encode_with_version(&sid, &c1, ProtocolVersion::V1));
     }
 
     #[test]

@@ -59,6 +59,7 @@ impl From<mcpix_core::error::McpixError> for McpixUniffiError {
             E::TransportFieldLength(_)
             | E::TransportFieldCharset(_)
             | E::TransportFieldPrefix
+            | E::UnsupportedProtocolVersion(_)
             | E::SeedLength { .. } => Self::TransportField(e.to_string()),
             E::Storage(_) | E::Transport(_) | E::Mismatch | E::ReplayRejected => {
                 Self::Storage(e.to_string())

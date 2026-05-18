@@ -28,6 +28,7 @@ public enum McpixStatus
     Mismatch = 12,
     Storage = 13,
     Transport = 14,
+    UnsupportedProtocolVersion = 15,
     Panic = 98,
     Unknown = 99,
 }
