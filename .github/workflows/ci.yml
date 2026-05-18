@@ -45,6 +45,9 @@ jobs:
       - name: cargo test (mTLS feature)
         run: cargo test -p mcpix-bank-receiver --features mtls
 
+      - name: cargo test (OCSP live query feature)
+        run: cargo test -p mcpix-bank-receiver --features ocsp,http-server
+
       - name: cargo test (mcpix-embed + qr)
         run: cargo test -p mcpix-embed --features qr
 

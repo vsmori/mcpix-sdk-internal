@@ -29,9 +29,15 @@ A versão anterior do `THREAT_MODEL.md` listava revogação como
 
 O que **continua fora do escopo**:
 
-- **Live OCSP query** do cliente em cada handshake. SDK opera
-  offline-friendly. Pull periódico da CRL/OCSP é responsabilidade do
-  operador.
+- **Live OCSP query como hook do handshake TLS**. A SDK provê o
+  módulo `mcpix-bank-receiver::ocsp` (feature `ocsp`) com
+  `OcspChecker` para consulta **out-of-band**, executada antes de
+  operações sensíveis — não em cada handshake. Veja
+  [Live OCSP](#live-ocsp-query-out-of-band) abaixo.
+- **Verificação criptográfica da assinatura na OcspResponse** — a
+  Phase 1 do módulo `ocsp` parseia status mas delega validação da
+  assinatura ao integrador, que tem a CA chain do mTLS. Phase 2
+  fechará isso quando tooling de delegate-signing estiver pronto.
 - **CRL distribution points dinâmicos** — não fazemos parse da extensão
   `crlDistributionPoints` do cert para descobrir onde baixar a CRL.
   Operador fornece o PEM consolidado.
@@ -94,6 +100,42 @@ configurado explicitamente). O caminho `MtlsClientMaterial` com CRLs
 ativadas usa `WebPkiServerVerifier`, então valida stapling — caminho
 legado (sem CRLs) usa o verifier default do reqwest, que historicamente
 não verifica stapling.
+
+## Live OCSP query (out-of-band)
+
+Feature `ocsp` (cargo `--features ocsp,http-client`). Útil quando
+CRL pode estar minutos desatualizada e a operação merece o custo de
++1 RTT contra o responder da CA.
+
+```rust
+use mcpix_bank_receiver::ocsp::{OcspChecker, OcspStatus};
+
+let client = reqwest::blocking::Client::new();
+let checker = OcspChecker::new(&client, "http://ocsp.federation-ca.example/");
+
+// Antes de iniciar uma transação sensível:
+match checker.check(&server_cert_pem, &issuer_cert_pem)? {
+    OcspStatus::Good => { /* prossegue */ }
+    OcspStatus::Revoked { reason_code } => {
+        return Err(/* aborta — cert revogado */);
+    }
+    OcspStatus::Unknown => {
+        // Política: fail-closed (recomendado) ou fail-open (apenas log).
+        return Err(/* responder não conhece o cert */);
+    }
+}
+```
+
+**Phase 1 (entregue):** request builder, transport HTTP POST,
+response parser. 9 testes cobrindo wire round-trip, malformed bytes,
+responder unreachable.
+
+**Phase 2 (próximas sessões):** verificação criptográfica da
+assinatura da `OcspResponse` contra a CA. Hoje a integridade da
+response depende do canal cliente↔responder. Workaround temporário:
+use HTTPS para o responder URL (validado pelos system roots ou pelo
+seu CA bundle), o que reduz a janela a um TOFU vs MITM ativo na
+hierarquia de root certs públicos.
 
 ## Tabela de risco residual
 

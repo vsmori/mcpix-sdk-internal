@@ -41,6 +41,10 @@ impl SeedPayload {
     }
 }
 
+/// Usado apenas por `http_server` — `cfg` evita dead_code warning
+/// quando só `http-client` ou `ocsp` estão ativos (e wire.rs é
+/// compilado mas ErrorBody não tem consumidor local).
+#[cfg(feature = "http-server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorBody {
     pub error: String,

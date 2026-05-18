@@ -23,6 +23,9 @@ pub mod mtls_server;
 #[cfg(feature = "mtls")]
 pub mod mtls_client;
 
+#[cfg(feature = "ocsp")]
+pub mod ocsp;
+
 #[cfg(any(feature = "http-server", feature = "http-client"))]
 mod wire;
 

@@ -389,8 +389,10 @@ parágrafos "fora do escopo" pelos docs e resumos de sessão).
    `xtask verify-hermetic` + toolchain pinada + catálogo de `build.rs`
    prontos. Falta: CI rotineiro do hermetic build, cross-runner hash
    comparison, audit crate-a-crate da Categoria C.
-4. **Live OCSP query** (§6.5 / `docs/MTLS_REVOCATION.md`) — hoje só
-   stapling; cliente fazer OCSP request a cada handshake é incremento.
+4. **Live OCSP query (Phase 1)** (§6.5 / `docs/MTLS_REVOCATION.md`) —
+   request builder + parser + transport + 9 testes prontos. Falta
+   Phase 2: verificação criptográfica da assinatura da OcspResponse
+   contra a CA (hoje delegada ao integrator).
 5. **Anti-replay de backup** (`mcpix-backup/src/lib.rs`) — protocolo
    institucional para invalidar backup antigo no banco recebedor antes
    de aceitar device novo.

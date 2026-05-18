@@ -21,6 +21,18 @@ mtls = [
     "dep:rustls-pemfile",
     "dep:x509-parser",
 ]
+# OCSP live query — incremento sobre stapling (S14). Caller faz a
+# consulta out-of-band ao responder antes de operações sensíveis.
+# Phase 1: builder + parser + HTTP. Verificação de assinatura é
+# responsabilidade do integrator (cert chain do mTLS); docs/MTLS_REVOCATION.md
+# detalha.
+ocsp = [
+    "http-client",
+    "dep:x509-ocsp",
+    "dep:x509-cert",
+    "dep:sha1",
+    "dep:rustls-pemfile",
+]
 
 [dependencies]
 mcpix-core.workspace = true
@@ -38,6 +50,10 @@ axum-server = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 x509-parser = { workspace = true, optional = true }
+# OCSP support (feature `ocsp`)
+x509-ocsp = { version = "0.2", optional = true, default-features = false, features = ["std", "builder"] }
+x509-cert = { version = "0.2", optional = true, default-features = false, features = ["std"] }
+sha1 = { version = "0.10", optional = true, features = ["oid"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "sync"] }
