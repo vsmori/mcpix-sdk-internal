@@ -451,6 +451,53 @@ fn print_help() {
     println!("  hash-artifacts       Write dist/SHA256SUMS over every file in dist/");
     println!("  gen-release-key      Generate a new Ed25519 release keypair");
     println!("  sign-artifacts       Sign dist/SHA256SUMS with MCPIX_SIGN_PRIVKEY_HEX");
+    println!("  build-wasm           Build mcpix-wasm + run wasm-bindgen → examples/web-demo/pkg");
+}
+
+fn build_wasm(root: &Path) -> Result<(), String> {
+    // 1. cargo build --release --target wasm32-unknown-unknown -p mcpix-wasm
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = std::process::Command::new(&cargo)
+        .args([
+            "build",
+            "--release",
+            "--target",
+            "wasm32-unknown-unknown",
+            "-p",
+            "mcpix-wasm",
+        ])
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo build wasm32: {e}"))?;
+    if !status.success() {
+        return Err("cargo build wasm32 failed".into());
+    }
+
+    // 2. wasm-bindgen --target web --out-dir examples/web-demo/pkg
+    //    target/wasm32-unknown-unknown/release/mcpix_wasm.wasm
+    let wasm_input = root
+        .join("target/wasm32-unknown-unknown/release/mcpix_wasm.wasm");
+    if !wasm_input.exists() {
+        return Err(format!("wasm artifact not found at {}", wasm_input.display()));
+    }
+    let out_dir = root.join("examples/web-demo/pkg");
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("mkdir pkg/: {e}"))?;
+
+    let status = std::process::Command::new("wasm-bindgen")
+        .arg("--target")
+        .arg("web")
+        .arg("--out-dir")
+        .arg(&out_dir)
+        .arg(&wasm_input)
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("spawn wasm-bindgen (instale com `cargo install wasm-bindgen-cli --version 0.2.121`): {e}"))?;
+    if !status.success() {
+        return Err("wasm-bindgen failed".into());
+    }
+
+    println!("OK: examples/web-demo/pkg/ pronto. Sirva com `python3 -m http.server` em examples/web-demo/.");
+    Ok(())
 }
 
 fn main() -> ExitCode {
@@ -470,6 +517,7 @@ fn main() -> ExitCode {
         Some("hash-artifacts") => hash_artifacts(&root),
         Some("gen-release-key") => gen_release_key(&root),
         Some("sign-artifacts") => sign_artifacts(&root),
+        Some("build-wasm") => build_wasm(&root),
         Some("--help") | Some("-h") | None => {
             print_help();
             return ExitCode::SUCCESS;

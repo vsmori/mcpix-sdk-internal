@@ -206,6 +206,19 @@ git commit -m "rotate release signing key"
   de cliente assinado por CA não-confiada; extração de identidade do
   cert DER
 
+**Sessão 15** (demo browser via WebAssembly)
+- Nova crate `mcpix-wasm` com bindings `wasm-bindgen` cobrindo ambos os
+  lados do protocolo num único módulo wasm de ~80 KB
+- `examples/web-demo/index.html` single-page sem framework com layout
+  side-by-side (recebedor + pagador), código colorizado por
+  público/secreto, log de operações, replay detection visual
+- `getrandom = { features = ["js"] }` plumba `crypto.getRandomValues`
+  para `rand_core::OsRng` — `Seed` gerada com entropia real do browser
+- `cargo xtask build-wasm` reprodutível; CI valida que o bundle final
+  fica abaixo de 200 KB (smoke contra blob inflation)
+- 3 testes host-side mirram o fluxo da demo (substituição institucional
+  bit-exata, replay rejeitado, tampering detectado)
+
 **Sessão 14** (revogação de certificados mTLS — CRL + OCSP stapling)
 - `ServerTlsConfig` (novo): builder com `with_client_crls(pem)` e
   `with_stapled_ocsp(der)`. CRL valida client certs apresentados;

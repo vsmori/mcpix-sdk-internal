@@ -9,6 +9,7 @@ members = [
     "crates/mcpix-uniffi",
     "crates/mcpix-embed",
     "crates/mcpix-backup",
+    "crates/mcpix-wasm",
     "crates/uniffi-bindgen",
     "examples",
     "xtask",
