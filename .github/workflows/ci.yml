@@ -54,6 +54,13 @@ jobs:
       - name: cargo test (backup host↔embed cross-validation)
         run: cargo test -p mcpix-embed --features restore --test backup_cross_validate
 
+      - name: fuzz corpus replay (deterministic regression suite)
+        # Roda os 266 inputs versionados em fuzz/corpus/ pelos parsers,
+        # garantindo a invariante "nenhum input previamente conhecido
+        # capota o parser nem produz forjamento". Sem nightly, sem
+        # libfuzzer — apenas exercita o corpus como dados.
+        run: cargo xtask fuzz-replay
+
       - name: install wasm32 target + wasm-bindgen-cli
         run: |
           rustup target add wasm32-unknown-unknown

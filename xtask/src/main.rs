@@ -452,6 +452,24 @@ fn print_help() {
     println!("  gen-release-key      Generate a new Ed25519 release keypair");
     println!("  sign-artifacts       Sign dist/SHA256SUMS with MCPIX_SIGN_PRIVKEY_HEX");
     println!("  build-wasm           Build mcpix-wasm + run wasm-bindgen → examples/web-demo/pkg");
+    println!("  fuzz-replay          Replay versioned corpus through fuzz targets (no nightly)");
+}
+
+fn fuzz_replay(root: &Path) -> Result<(), String> {
+    // Wrapper sobre `cargo test -p mcpix-core --test corpus_replay`. Existe
+    // como comando dedicado para iteração local + para que o CI tenha um
+    // ponto de entrada consistente — mudar de teste para binário no futuro
+    // não quebra invocações externas.
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = std::process::Command::new(&cargo)
+        .args(["test", "-p", "mcpix-core", "--test", "corpus_replay", "--", "--nocapture"])
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo test: {e}"))?;
+    if !status.success() {
+        return Err("fuzz corpus replay failed — see output above".into());
+    }
+    Ok(())
 }
 
 fn build_wasm(root: &Path) -> Result<(), String> {
@@ -518,6 +536,7 @@ fn main() -> ExitCode {
         Some("gen-release-key") => gen_release_key(&root),
         Some("sign-artifacts") => sign_artifacts(&root),
         Some("build-wasm") => build_wasm(&root),
+        Some("fuzz-replay") => fuzz_replay(&root),
         Some("--help") | Some("-h") | None => {
             print_help();
             return ExitCode::SUCCESS;

@@ -24,3 +24,7 @@ ed25519-dalek.workspace = true
 rand_core.workspace = true
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 proptest = { workspace = true }
+# `arbitrary` é usada pelo replay para reconstruir a entrada
+# estruturada do `fuzz_verify_combined` a partir dos bytes opacos do
+# corpus — mesma API que o libfuzzer usa, sem nightly.
+arbitrary = { version = "1", features = ["derive"] }
