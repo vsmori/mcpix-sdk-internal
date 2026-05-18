@@ -19,18 +19,37 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use wasm_bindgen::prelude::*;
 
 use mcpix_core::state::{apply_recover_c2, ValidationOutcome};
-use mcpix_core::traits::SeedStore;
+use mcpix_core::traits::{Clock, SeedStore};
 use mcpix_core::transport_field;
 use mcpix_core::types::SeedId;
 use mcpix_receiver_sdk::memory_store::InMemorySeedStore;
 use mcpix_receiver_sdk::monotonic_counter::InMemoryCounter;
 use mcpix_receiver_sdk::system_random::OsRandom;
+use mcpix_receiver_sdk::timestamp_counter::TimestampQuantizedCounter;
 use mcpix_receiver_sdk::ReceiverSdk;
+
+// ─────────────────────────────────────────────────────────────────────────
+// JsInjectableClock — Clock cujo tempo é controlado por chamadas a
+// `tick(now_secs)` do JS. Permite usar `TimestampQuantizedCounter` em
+// wasm sem depender de `std::time::SystemTime` (que não é confiável em
+// wasm32-unknown-unknown sem deps adicionais).
+// ─────────────────────────────────────────────────────────────────────────
+
+struct JsInjectableClock {
+    now_secs: AtomicU64,
+}
+
+impl Clock for JsInjectableClock {
+    fn now_unix_secs(&self) -> u64 {
+        self.now_secs.load(Ordering::Relaxed)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Panic hook — encaminha pânicos do Rust para `console.error` para que
@@ -61,6 +80,11 @@ extern "C" {
 pub struct WasmDemo {
     store: Arc<InMemorySeedStore>,
     sdk: ReceiverSdk,
+    /// `Some` apenas em modo quantizado — handle para o clock
+    /// injetável atualizado via `tick`.
+    clock: Option<Arc<JsInjectableClock>>,
+    /// `Some` apenas em modo quantizado — usado para `current_quantum`.
+    window_seconds: Option<u64>,
 }
 
 #[wasm_bindgen]
@@ -71,7 +95,60 @@ impl WasmDemo {
         let counter = Arc::new(InMemoryCounter::new());
         let rng = Arc::new(OsRandom);
         let sdk = ReceiverSdk::new(store.clone(), counter, rng);
-        WasmDemo { store, sdk }
+        WasmDemo {
+            store,
+            sdk,
+            clock: None,
+            window_seconds: None,
+        }
+    }
+
+    /// Cria uma instância em **modo timestamp quantizado**. O contador
+    /// `T` deriva de `now_unix_secs / window_seconds`. Re-emissão
+    /// dentro do mesmo quantum falha com `CounterCollision`.
+    ///
+    /// O clock vem do JS via [`Self::tick`]; chame antes de cada
+    /// operação. `initial_time_secs` evita um primeiro tick com
+    /// `now=0` (quantum 0 colidiria com qualquer T futuro).
+    pub fn new_quantized(window_seconds: u64, initial_time_secs: u64) -> WasmDemo {
+        let store = Arc::new(InMemorySeedStore::new());
+        let clock = Arc::new(JsInjectableClock {
+            now_secs: AtomicU64::new(initial_time_secs),
+        });
+        let counter = Arc::new(TimestampQuantizedCounter::with_window(
+            clock.clone(),
+            window_seconds,
+        ));
+        let rng = Arc::new(OsRandom);
+        let sdk = ReceiverSdk::new(store.clone(), counter, rng);
+        WasmDemo {
+            store,
+            sdk,
+            clock: Some(clock),
+            window_seconds: Some(window_seconds),
+        }
+    }
+
+    /// Em modo quantizado: atualiza o relógio injetado para `now_secs`.
+    /// No-op em modo sequencial.
+    pub fn tick(&self, now_secs: u64) {
+        if let Some(c) = &self.clock {
+            c.now_secs.store(now_secs, Ordering::Relaxed);
+        }
+    }
+
+    /// Em modo quantizado: devolve o `T` atual = `now / window_seconds`.
+    /// `None` em modo sequencial (contador é opaco, não derivado do
+    /// tempo).
+    pub fn current_quantum(&self) -> Option<u64> {
+        let ws = self.window_seconds?;
+        let clock = self.clock.as_ref()?;
+        Some(clock.now_unix_secs() / ws)
+    }
+
+    /// Window seconds configurado (None em modo sequencial).
+    pub fn window_seconds(&self) -> Option<u64> {
+        self.window_seconds
     }
 
     /// Registra um recebedor (gera Seed aleatória e armazena sob `seed_id`).

@@ -118,6 +118,37 @@
     <code>C₂</code>). Tudo offline — não há rede.
 </p>
 
+<!-- ─────────────────────── Modo (Sequential | Quantized) ─────────────────────── -->
+<div class="panel" style="margin-bottom: 20px; max-width: 1400px;">
+    <h2>Modo do contador</h2>
+    <div class="row" style="margin: 0;">
+        <label style="margin: 0; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="mode" value="sequential" checked>
+            <strong>Sequencial</strong> — T monotônico, atribuído pelo recebedor
+        </label>
+    </div>
+    <div class="row" style="margin: 4px 0;">
+        <label style="margin: 0; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="mode" value="quantized">
+            <strong>Quantizado por tempo</strong> — T = ⌊now/window⌋
+        </label>
+        <div style="margin-left: 16px;">
+            <label style="display: inline-block; margin: 0;">Window (segundos)</label>
+            <input type="number" id="windowSeconds" value="30" min="5" max="300" style="width: 80px;">
+        </div>
+    </div>
+    <div id="quantizedStatus" style="display: none; margin-top: 10px;">
+        <span style="color: var(--muted); font-size: 12px;">Quantum atual:</span>
+        <code id="qCurrentT" style="margin: 0 8px; color: var(--public);">—</code>
+        <span style="color: var(--muted); font-size: 12px;">próxima janela em</span>
+        <code id="qCountdown" style="margin: 0 8px; color: var(--warn);">—</code>
+    </div>
+    <p class="help">
+        Trocar de modo reseta a demo. <strong>Quantizado</strong>: re-gerar cobrança no mesmo quantum
+        falha com <code>CounterCollision</code> — defesa contra C₂ duplicado.
+    </p>
+</div>
+
 <div class="grid">
 
     <!-- ─────────────────────── Recebedor ─────────────────────── -->
@@ -223,6 +254,8 @@
 
     let demo = null;
     let lastCharge = null;
+    let currentMode = 'sequential';
+    let tickInterval = null;
 
     const $ = (id) => document.getElementById(id);
     const log = (msg, cls = '') => {
@@ -234,11 +267,72 @@
         el.scrollTop = el.scrollHeight;
     };
 
+    // Recria a instância wasm quando o usuário troca de modo.
+    // Em quantizado, dispara um setInterval para chamar tick() e
+    // atualizar o display do quantum corrente.
+    function rebuildDemo() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const win = BigInt($('windowSeconds').value || '30');
+        const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+
+        // Cleanup
+        if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+        if (demo) { demo.free(); demo = null; }
+
+        if (mode === 'quantized') {
+            demo = WasmDemo.new_quantized(win, nowSecs);
+            $('quantizedStatus').style.display = 'block';
+            tickInterval = setInterval(updateQuantizedDisplay, 250);
+            updateQuantizedDisplay();
+        } else {
+            demo = new WasmDemo();
+            $('quantizedStatus').style.display = 'none';
+        }
+
+        currentMode = mode;
+        lastCharge = null;
+        $('btnGenerate').disabled = true;
+        $('btnValidate').disabled = true;
+        $('btnValidateAgain').disabled = true;
+        $('btnCopyC2').disabled = true;
+        ['fieldTransport', 'fieldCounter', 'fieldRetainedC2',
+         'fieldExtractedSeedId', 'fieldExtractedC1', 'fieldRecoveredC2'].forEach(id => {
+            const el = $(id); el.textContent = '—'; el.classList.add('empty');
+        });
+        $('validationOutcome').textContent = '';
+        $('validationOutcome').className = '';
+        log(`modo: ${mode}${mode === 'quantized' ? ` (window=${win}s)` : ''} — estado resetado`, 'warn');
+    }
+
+    function updateQuantizedDisplay() {
+        if (!demo || currentMode !== 'quantized') return;
+        const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+        demo.tick(nowSecs);
+        const q = demo.current_quantum();
+        const win = demo.window_seconds();
+        $('qCurrentT').textContent = q !== undefined ? q.toString() : '—';
+        if (win !== undefined) {
+            const nowMs = Date.now();
+            const winMs = Number(win) * 1000;
+            const elapsed = nowMs % winMs;
+            const remainSec = Math.ceil((winMs - elapsed) / 1000);
+            $('qCountdown').textContent = `${remainSec}s`;
+        }
+    }
+
     async function bootstrap() {
         try {
             await init();
-            demo = new WasmDemo();
-            log('módulo wasm carregado — ' + (await navigator.platform || 'unknown'), 'ok');
+            // Listeners do modo (precisam de wasm carregado para
+            // chamar new_quantized).
+            document.querySelectorAll('input[name="mode"]').forEach(r => {
+                r.addEventListener('change', rebuildDemo);
+            });
+            $('windowSeconds').addEventListener('change', () => {
+                if (currentMode === 'quantized') rebuildDemo();
+            });
+            rebuildDemo();  // estado inicial: sequencial
+            log('módulo wasm carregado — ' + (navigator.platform || 'unknown'), 'ok');
         } catch (e) {
             log('falha ao carregar wasm: ' + e, 'err');
         }
@@ -265,6 +359,11 @@
     $('btnGenerate').onclick = () => {
         const sid = $('seedId').value.trim();
         const amount = BigInt($('amount').value || '0');
+        // Em quantizado: garante que o clock está atualizado antes
+        // de generate_charge (que internamente lê via Counter::next).
+        if (currentMode === 'quantized') {
+            demo.tick(BigInt(Math.floor(Date.now() / 1000)));
+        }
         try {
             const charge = demo.generate_charge(sid, amount);
             lastCharge = charge;
@@ -277,7 +376,12 @@
             $('payerTransport').value = charge.transport_field;
             $('payerCounter').value = charge.counter;
         } catch (e) {
-            log('erro ao gerar cobrança: ' + e, 'err');
+            // Em quantizado: CounterCollision quando re-gera no mesmo
+            // window. Mostra com cor "warn" porque é comportamento
+            // esperado, não bug.
+            const msg = e.toString();
+            const cls = msg.includes('counter collision') ? 'warn' : 'err';
+            log(`gerar cobrança: ${msg}`, cls);
         }
     };
 
