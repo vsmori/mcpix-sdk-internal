@@ -7,15 +7,22 @@ quando você porta para outro stack.
 
 ## Mapa
 
-| Pasta | Stack | Status | Validado neste env |
-|---|---|---|---|
-| [`e2e_demo.rs`](e2e_demo.rs) | Rust host (CLI) | ✅ produção | `cargo run --example e2e_demo` |
-| [`web-demo/`](web-demo/) | WASM + HTML/JS browser | ✅ produção | `cargo xtask build-wasm` + http server |
-| [`dotnet-sample/`](dotnet-sample/) | .NET 8 console (P/Invoke) | ✅ código completo | ❌ dotnet não disponível aqui |
-| [`kotlin-jvm-sample/`](kotlin-jvm-sample/) | Kotlin JVM CLI (JNA) | ✅ código completo | 🟡 build Gradle exige toolchain |
-| [`android-sample/`](android-sample/) | Android Activity + AAR | ✅ código completo | 🟡 build exige Android SDK |
-| [`ios-sample/`](ios-sample/) | iOS SwiftUI + XCFramework | ⚠️ skeleton | ❌ exige macOS + Xcode |
-| [`embedded-demo/`](embedded-demo/) | Cortex-M4F bare-metal (`no_std`) | ✅ produção | ✅ cross-compile thumbv7em |
+| Pasta | Stack | CI |
+|---|---|---|
+| [`e2e_demo.rs`](e2e_demo.rs) | Rust host (CLI) | `ci.yml` (workspace test) |
+| [`web-demo/`](web-demo/) | WASM + HTML/JS browser | `ci.yml` (wasm bundle size) |
+| [`dotnet-sample/`](dotnet-sample/) | .NET 8 console (P/Invoke) | `ci.yml` (dotnet-sample job) |
+| [`kotlin-jvm-sample/`](kotlin-jvm-sample/) | Kotlin JVM CLI (JNA) | `ci.yml` (kotlin-smoke job, step `gradle assemble`) |
+| [`android-sample/`](android-sample/) | Android Activity + AAR | `samples-mobile.yml` (manual + mensal) |
+| [`ios-sample/`](ios-sample/) | iOS SwiftUI + XCFramework | `samples-mobile.yml` (manual + mensal, macOS runner) |
+| [`embedded-demo/`](embedded-demo/) | Cortex-M4F bare-metal (`no_std`) | `ci.yml` (cross-compile thumbv7em) |
+
+Por que os samples mobile estão num workflow separado: Android exige
+SDK + NDK (~5 min de setup) e iOS exige runner macOS (10× o custo
+de Ubuntu). Rodar em cada PR seria caro demais para o sinal — bit-rot
+nessas stacks é mensal-trimestral (atualizações de AGP / Xcode), não
+por-commit. O `samples-mobile.yml` cobre via dispatch manual e
+schedule mensal.
 
 > **Por que não E2E completo em cada sample**: a face exposta pelos
 > bindings (`mcpix-uniffi`) é só a do **recebedor** — register,

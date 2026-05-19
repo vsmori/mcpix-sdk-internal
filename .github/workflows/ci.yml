@@ -143,3 +143,35 @@ jobs:
       - name: gradle test
         working-directory: bindings/kotlin
         run: gradle test --no-daemon
+
+      # Compila o sample CLI (não roda — `gradle run` exigiria a .so
+      # no java.library.path e isso já está coberto pelos testes acima).
+      # `gradle assemble` valida que: (a) o source-set merge entre
+      # examples/kotlin-jvm-sample/src e bindings/kotlin/src resolve;
+      # (b) o jar de saída compila.
+      - name: gradle assemble (examples/kotlin-jvm-sample)
+        working-directory: examples/kotlin-jvm-sample
+        run: gradle assemble --no-daemon
+
+  dotnet-sample:
+    name: .NET sample build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # P/Invoke resolve a `.so` em runtime, mas `dotnet build` precisa do
+      # csproj de bindings/dotnet/ que referencia layouts em ../dist/ via
+      # convenção NuGet. O build de bindings só precisa do cdylib presente
+      # para empacotar; para validar o sample, build-linux + dotnet build
+      # bastam.
+      - name: build linux cdylib
+        run: cargo xtask build-linux
+
+      - name: dotnet build (examples/dotnet-sample)
+        working-directory: examples/dotnet-sample
+        run: dotnet build -c Release --nologo
