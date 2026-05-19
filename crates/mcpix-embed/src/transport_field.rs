@@ -5,7 +5,7 @@
 //! onde o microcontrolador também lê o próprio campo de volta (loopback,
 //! diagnóstico).
 
-use crate::types::{C1, C1_LEN, EmbedError, SeedId, SEED_ID_MAX_LEN};
+use crate::types::{EmbedError, SeedId, C1, C1_LEN, SEED_ID_MAX_LEN};
 
 pub const PROTOCOL_PREFIX: &str = "PIXOFFv1";
 pub const PROTOCOL_PREFIX_LEN: usize = 8;

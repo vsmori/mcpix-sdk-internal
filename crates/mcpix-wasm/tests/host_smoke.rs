@@ -123,7 +123,10 @@ impl Clock for TestClock {
     }
 }
 
-fn quantized_sdk(window_seconds: u64, initial: u64) -> (Arc<InMemorySeedStore>, ReceiverSdk, Arc<TestClock>) {
+fn quantized_sdk(
+    window_seconds: u64,
+    initial: u64,
+) -> (Arc<InMemorySeedStore>, ReceiverSdk, Arc<TestClock>) {
     let store = Arc::new(InMemorySeedStore::new());
     let clock = Arc::new(TestClock {
         now: AtomicU64::new(initial),

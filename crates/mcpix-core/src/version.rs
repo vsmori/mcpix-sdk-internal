@@ -145,7 +145,10 @@ mod tests {
 
     #[test]
     fn current_prefix_is_8_bytes() {
-        assert_eq!(ProtocolVersion::current().prefix().len(), PROTOCOL_PREFIX_LEN);
+        assert_eq!(
+            ProtocolVersion::current().prefix().len(),
+            PROTOCOL_PREFIX_LEN
+        );
     }
 
     #[test]

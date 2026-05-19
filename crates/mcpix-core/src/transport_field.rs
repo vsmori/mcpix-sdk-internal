@@ -15,7 +15,7 @@
 //! identidade do esquema; deriva-se dele a sinalização inter-institucional.
 
 use crate::error::McpixError;
-use crate::types::{C1, C1_TRANSPORT_LEN, SEED_ID_MAX_LEN, SeedId};
+use crate::types::{SeedId, C1, C1_TRANSPORT_LEN, SEED_ID_MAX_LEN};
 use crate::version::{self, ProtocolVersion, PROTOCOL_PREFIX_LEN};
 
 /// Prefixo da versão **atual** emitida por encode. Mantido por
@@ -240,7 +240,10 @@ mod tests {
         let seed = Seed::from_bytes([0x33; 32]);
         let (c1, _) = derive_pair(&seed, 7);
         let sid = sample_seed_id();
-        assert_eq!(encode(&sid, &c1), encode_with_version(&sid, &c1, ProtocolVersion::V1));
+        assert_eq!(
+            encode(&sid, &c1),
+            encode_with_version(&sid, &c1, ProtocolVersion::V1)
+        );
     }
 
     #[test]

@@ -64,8 +64,8 @@ use zeroize::Zeroize;
 use mcpix_core::types::{Seed, SeedId};
 
 pub use format::{
-    Container, CounterMode, KdfParams, PayloadView, MAGIC, VERSION, HEADER_LEN, PAYLOAD_LEN,
-    ENCRYPTED_PAYLOAD_LEN, TOTAL_LEN,
+    Container, CounterMode, KdfParams, PayloadView, ENCRYPTED_PAYLOAD_LEN, HEADER_LEN, MAGIC,
+    PAYLOAD_LEN, TOTAL_LEN, VERSION,
 };
 
 /// Erros do backup. Variantes opacas sobre a passphrase para reduzir
@@ -237,10 +237,7 @@ mod tests {
     use super::*;
 
     fn sample_input() -> (Seed, SeedId) {
-        (
-            Seed::from_bytes([0xAB; 32]),
-            SeedId::new("R1").unwrap(),
-        )
+        (Seed::from_bytes([0xAB; 32]), SeedId::new("R1").unwrap())
     }
 
     fn quick_params() -> KdfParams {
@@ -262,8 +259,8 @@ mod tests {
             counter_mode: CounterMode::Sequential,
             counter_t: 42,
         };
-        let text = export_with_params(&input, b"correct-horse-battery-staple", quick_params())
-            .unwrap();
+        let text =
+            export_with_params(&input, b"correct-horse-battery-staple", quick_params()).unwrap();
         // Base58Check é alfanumérico (alphabet Bitcoin) — cabe em uma
         // linha bem confortável.
         assert!(text.bytes().all(|b| b.is_ascii_alphanumeric()));

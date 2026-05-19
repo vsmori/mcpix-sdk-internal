@@ -9,7 +9,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::types::{C1, C1_TRANSPORT_LEN, C2, C2_TRANSPORT_LEN, Seed};
+use crate::types::{Seed, C1, C1_TRANSPORT_LEN, C2, C2_TRANSPORT_LEN};
 
 type HmacSha256 = Hmac<Sha256>;
 

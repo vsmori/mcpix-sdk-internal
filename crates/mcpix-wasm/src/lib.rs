@@ -165,7 +165,10 @@ impl WasmDemo {
     /// localmente, devolve o campo de transporte público (35 chars).
     pub fn generate_charge(&self, seed_id: &str, amount_cents: u64) -> Result<JsValue, JsValue> {
         let sid = SeedId::new(seed_id).map_err(stringify)?;
-        let charge = self.sdk.generate_charge(&sid, amount_cents).map_err(stringify)?;
+        let charge = self
+            .sdk
+            .generate_charge(&sid, amount_cents)
+            .map_err(stringify)?;
         // C₂ é segredo no fluxo real — só expomos aqui porque a demo precisa
         // mostrar visualmente "isto fica retido no recebedor".
         let retained = self
@@ -192,7 +195,11 @@ impl WasmDemo {
     /// O `counter` precisa vir do contexto (timestamp quantizado real,
     /// ou injeção explícita como aqui). A demo já carrega `counter` da
     /// cobrança recém-gerada.
-    pub fn payer_recover_c2(&self, transport_field: &str, counter: u64) -> Result<JsValue, JsValue> {
+    pub fn payer_recover_c2(
+        &self,
+        transport_field: &str,
+        counter: u64,
+    ) -> Result<JsValue, JsValue> {
         let parsed = transport_field::parse(transport_field).map_err(stringify)?;
         // Acesso direto ao seed store — equivalente lógico ao
         // `BankReceiver::lookup_seed` que em produção atravessa mTLS.

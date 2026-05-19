@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 
 use arbitrary::{Arbitrary, Unstructured};
 
-use mcpix_core::signature::{verify_combined, RELEASE_PUBKEY};
 use mcpix_core::signature::parse_sums_line;
+use mcpix_core::signature::{verify_combined, RELEASE_PUBKEY};
 use mcpix_core::transport_field::parse as parse_transport;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -169,7 +169,11 @@ fn corpus_directory_exists() {
         "expected versioned corpus at {}",
         root.join("corpus").display()
     );
-    for target in &["fuzz_transport_parse", "fuzz_sums_line", "fuzz_verify_combined"] {
+    for target in &[
+        "fuzz_transport_parse",
+        "fuzz_sums_line",
+        "fuzz_verify_combined",
+    ] {
         let dir = root.join("corpus").join(target);
         assert!(
             dir.exists(),

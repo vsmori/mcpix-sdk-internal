@@ -120,7 +120,9 @@ impl SeedSealer for ChaChaSealer {
                     aad: &[],
                 },
             )
-            .map_err(|_| McpixError::Storage("unseal: aead decrypt failed (tampered or wrong key)".into()))?;
+            .map_err(|_| {
+                McpixError::Storage("unseal: aead decrypt failed (tampered or wrong key)".into())
+            })?;
         if pt.len() != SEED_LEN {
             return Err(McpixError::Storage(format!(
                 "unseal: bad plaintext length {}",
@@ -163,21 +165,14 @@ impl<W: SeedSealer> SealedInMemorySeedStore<W> {
 }
 
 impl<W: SeedSealer> SeedStore for SealedInMemorySeedStore<W> {
-    fn put_seed(
-        &self,
-        seed_id: &mcpix_core::types::SeedId,
-        seed: Seed,
-    ) -> Result<(), McpixError> {
+    fn put_seed(&self, seed_id: &mcpix_core::types::SeedId, seed: Seed) -> Result<(), McpixError> {
         let blob = self.sealer.seal(&seed)?;
         self.seeds.write().insert(seed_id.clone(), blob);
         // `seed` é dropada aqui — `ZeroizeOnDrop` apaga o material.
         Ok(())
     }
 
-    fn get_seed(
-        &self,
-        seed_id: &mcpix_core::types::SeedId,
-    ) -> Result<Option<Seed>, McpixError> {
+    fn get_seed(&self, seed_id: &mcpix_core::types::SeedId) -> Result<Option<Seed>, McpixError> {
         let blob = match self.seeds.read().get(seed_id) {
             Some(b) => b.clone(),
             None => return Ok(None),
@@ -197,7 +192,11 @@ impl<W: SeedSealer> SeedStore for SealedInMemorySeedStore<W> {
         seed_id: &mcpix_core::types::SeedId,
         counter: u64,
     ) -> Result<Option<RetainedReceipt>, McpixError> {
-        Ok(self.receipts.read().get(&(seed_id.clone(), counter)).cloned())
+        Ok(self
+            .receipts
+            .read()
+            .get(&(seed_id.clone(), counter))
+            .cloned())
     }
 
     fn mark_consumed(
@@ -302,8 +301,7 @@ mod tests {
         // Smoke ponta-a-ponta: o ReceiverSdk inteiro funciona
         // trocando InMemorySeedStore por SealedInMemorySeedStore.
         // Garante que o seal/unseal não muda o resultado funcional.
-        let store: Arc<dyn SeedStore> =
-            Arc::new(SealedInMemorySeedStore::new(sealer()));
+        let store: Arc<dyn SeedStore> = Arc::new(SealedInMemorySeedStore::new(sealer()));
         let counter = Arc::new(InMemoryCounter::new());
         let rng = Arc::new(OsRandom);
         let sdk = ReceiverSdk::new(store, counter, rng);
@@ -315,7 +313,11 @@ mod tests {
             .unwrap()
             .unwrap();
         let outcome = sdk
-            .validate_receipt(&proof.seed_id, charge.counter, retained.expected_c2.as_str())
+            .validate_receipt(
+                &proof.seed_id,
+                charge.counter,
+                retained.expected_c2.as_str(),
+            )
             .unwrap();
         assert_eq!(outcome, ValidationOutcome::Valid);
     }

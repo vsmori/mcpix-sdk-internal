@@ -42,8 +42,7 @@ use mcpix_core::version::ProtocolVersion;
 /// para não amarrar caminhos de chamada.
 pub trait BankReceiver: Send + Sync {
     fn register_seed(&self, receiver_id: &SeedId, seed: Seed) -> Result<(), McpixError>;
-    fn lookup_seed(&self, receiver_id: &SeedId, requester: &Requester)
-        -> Result<Seed, McpixError>;
+    fn lookup_seed(&self, receiver_id: &SeedId, requester: &Requester) -> Result<Seed, McpixError>;
 
     /// Lista as versões do protocolo que **este peer** consegue emitir e
     /// parsear. Usado pelo banco do pagador (ou outro peer) antes de
@@ -113,7 +112,12 @@ mod tests {
         let sid = SeedId::new("R1").unwrap();
         bank.register_seed(&sid, Seed::from_bytes([7; 32])).unwrap();
         let s = bank
-            .lookup_seed(&sid, &Requester { institution_id: "PAYER_BANK".into() })
+            .lookup_seed(
+                &sid,
+                &Requester {
+                    institution_id: "PAYER_BANK".into(),
+                },
+            )
             .unwrap();
         assert_eq!(s.as_bytes(), &[7u8; 32]);
     }
@@ -124,7 +128,9 @@ mod tests {
         let err = bank
             .lookup_seed(
                 &SeedId::new("ghost").unwrap(),
-                &Requester { institution_id: "X".into() },
+                &Requester {
+                    institution_id: "X".into(),
+                },
             )
             .unwrap_err();
         assert_eq!(err, McpixError::UnknownSeed);

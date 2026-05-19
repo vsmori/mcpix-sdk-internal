@@ -9,7 +9,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::types::{C1, C1_LEN, C2, C2_LEN, Seed};
+use crate::types::{Seed, C1, C1_LEN, C2, C2_LEN};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -40,8 +40,8 @@ fn encode_alphanumeric<const N: usize>(bytes: &[u8]) -> [u8; N] {
 }
 
 fn hmac_chunks(seed: &Seed, chunks: &[&[u8]]) -> [u8; 32] {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(seed.as_bytes())
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        <HmacSha256 as Mac>::new_from_slice(seed.as_bytes()).expect("HMAC accepts any key length");
     for c in chunks {
         mac.update(c);
     }

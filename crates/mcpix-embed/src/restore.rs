@@ -104,11 +104,24 @@ pub fn import(text: &str, passphrase: &[u8]) -> Result<RestoredState, RestoreErr
     let header: &[u8; HEADER_LEN] = blob[..HEADER_LEN]
         .try_into()
         .map_err(|_| RestoreError::Malformed)?;
-    let HeaderFields { m_cost_kib, t_cost, p_cost, salt, nonce_bytes } = parse_header(header)?;
+    let HeaderFields {
+        m_cost_kib,
+        t_cost,
+        p_cost,
+        salt,
+        nonce_bytes,
+    } = parse_header(header)?;
 
     // 3. KDF.
     let mut key_bytes = [0u8; 32];
-    derive_argon2id(passphrase, &salt, m_cost_kib, t_cost, p_cost, &mut key_bytes)?;
+    derive_argon2id(
+        passphrase,
+        &salt,
+        m_cost_kib,
+        t_cost,
+        p_cost,
+        &mut key_bytes,
+    )?;
 
     // 4. Decrypt com AAD = header.
     let key = Key::from_slice(&key_bytes);
@@ -166,7 +179,13 @@ fn parse_header(buf: &[u8; HEADER_LEN]) -> Result<HeaderFields, RestoreError> {
     salt.copy_from_slice(&buf[19..35]);
     let mut nonce_bytes = [0u8; 12];
     nonce_bytes.copy_from_slice(&buf[35..47]);
-    Ok(HeaderFields { m_cost_kib, t_cost, p_cost, salt, nonce_bytes })
+    Ok(HeaderFields {
+        m_cost_kib,
+        t_cost,
+        p_cost,
+        salt,
+        nonce_bytes,
+    })
 }
 
 fn derive_argon2id(

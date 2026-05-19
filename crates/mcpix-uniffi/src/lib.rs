@@ -21,8 +21,8 @@ use std::sync::Arc;
 use mcpix_core::state::ValidationOutcome;
 use mcpix_core::types::SeedId;
 use mcpix_receiver_sdk::{
-    memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter,
-    system_random::OsRandom, ReceiverSdk,
+    memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter, system_random::OsRandom,
+    ReceiverSdk,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,9 +53,9 @@ impl From<mcpix_core::error::McpixError> for McpixUniffiError {
             E::SeedIdLength { .. } | E::SeedIdCharset => Self::InvalidSeedId(e.to_string()),
             E::UnknownSeed => Self::UnknownSeed,
             E::NoRetainedReceipt => Self::NoRetainedReceipt,
-            E::CounterOverflow
-            | E::CounterCollision { .. }
-            | E::CounterRollback { .. } => Self::CounterOverflow,
+            E::CounterOverflow | E::CounterCollision { .. } | E::CounterRollback { .. } => {
+                Self::CounterOverflow
+            }
             E::TransportFieldLength(_)
             | E::TransportFieldCharset(_)
             | E::TransportFieldPrefix

@@ -117,7 +117,10 @@ mod tests {
         // Avança apenas 5s — ainda dentro do mesmo quantum.
         clk.advance(5);
         let err = c.next(&sid()).unwrap_err();
-        assert!(matches!(err, McpixError::CounterCollision { window_seconds: 30 }));
+        assert!(matches!(
+            err,
+            McpixError::CounterCollision { window_seconds: 30 }
+        ));
     }
 
     #[test]

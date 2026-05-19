@@ -20,5 +20,5 @@ pub mod types;
 pub mod version;
 
 pub use error::McpixError;
-pub use types::{C1, C2, Charge, ConfirmationCode, RetainedReceipt, Seed, SeedId};
+pub use types::{Charge, ConfirmationCode, RetainedReceipt, Seed, SeedId, C1, C2};
 pub use version::ProtocolVersion;

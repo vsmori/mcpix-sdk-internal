@@ -70,14 +70,10 @@ fn varied_seed_id_lengths_match() {
 
         let seed = [0x9Fu8; 32];
         let counter = 7u64;
-        let (core_c1, _) = mcpix_core::crypto::derive_pair(
-            &mcpix_core::types::Seed::from_bytes(seed),
-            counter,
-        );
-        let (embed_c1, _) = mcpix_embed::crypto::derive_pair(
-            &mcpix_embed::types::Seed::from_bytes(seed),
-            counter,
-        );
+        let (core_c1, _) =
+            mcpix_core::crypto::derive_pair(&mcpix_core::types::Seed::from_bytes(seed), counter);
+        let (embed_c1, _) =
+            mcpix_embed::crypto::derive_pair(&mcpix_embed::types::Seed::from_bytes(seed), counter);
         assert_eq!(embed_c1.as_str(), core_c1.as_str());
 
         let core_field = mcpix_core::transport_field::encode(&core_sid, &core_c1);

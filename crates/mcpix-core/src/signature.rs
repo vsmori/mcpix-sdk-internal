@@ -29,8 +29,7 @@ pub const SIGNATURE_LEN: usize = SIGNATURE_LENGTH;
 /// Chave pública canônica de release. Embarcada em compile-time para que
 /// o atacante precise alterar o código-fonte para substituí-la — e qualquer
 /// alteração quebra o SHA-256 self-check do próprio binário.
-pub const RELEASE_PUBKEY: &[u8; RELEASE_PUBKEY_LEN] =
-    include_bytes!("../trusted_keys/release.pub");
+pub const RELEASE_PUBKEY: &[u8; RELEASE_PUBKEY_LEN] = include_bytes!("../trusted_keys/release.pub");
 
 /// Resultado da verificação combinada (assinatura + hash).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -202,8 +201,14 @@ mod tests {
         let actual_hash = "bb".repeat(32);
         let sums = format!("{listed_hash}  libmcpix_uniffi.so\n");
         let sig = sk.sign(sums.as_bytes()).to_bytes();
-        match verify_combined(sums.as_bytes(), &sig, &pk, "libmcpix_uniffi.so", &actual_hash)
-            .unwrap()
+        match verify_combined(
+            sums.as_bytes(),
+            &sig,
+            &pk,
+            "libmcpix_uniffi.so",
+            &actual_hash,
+        )
+        .unwrap()
         {
             SignatureCheck::Tampered { .. } => {}
             other => panic!("expected Tampered, got {other:?}"),

@@ -40,7 +40,9 @@ use sha1::Sha1;
 use x509_cert::der::{Decode, Encode};
 use x509_cert::Certificate;
 use x509_ocsp::builder::OcspRequestBuilder;
-use x509_ocsp::{CertId, CertStatus, OcspRequest, OcspResponse, OcspResponseStatus, Request, Version};
+use x509_ocsp::{
+    CertId, CertStatus, OcspRequest, OcspResponse, OcspResponseStatus, Request, Version,
+};
 
 use mcpix_core::error::McpixError;
 
@@ -142,9 +144,8 @@ pub fn parse_ocsp_response(response_der: &[u8]) -> Result<OcspStatus, McpixError
     // resposta successful é `id-pkix-ocsp-basic` carregando um
     // BasicOcspResponse.
     let basic: x509_ocsp::BasicOcspResponse =
-        x509_cert::der::Decode::from_der(response_bytes.response.as_bytes()).map_err(|e| {
-            McpixError::Transport(format!("ocsp: decode BasicOcspResponse: {e}"))
-        })?;
+        x509_cert::der::Decode::from_der(response_bytes.response.as_bytes())
+            .map_err(|e| McpixError::Transport(format!("ocsp: decode BasicOcspResponse: {e}")))?;
 
     let single = basic
         .tbs_response_data
@@ -249,8 +250,7 @@ mod tests {
         let der = build_ocsp_request(&subj, &ca).expect("build OCSP request");
 
         // DER round-trip: deve ser decodificável como OcspRequest.
-        let decoded =
-            OcspRequest::from_der(&der).expect("OCSP request DER round-trips");
+        let decoded = OcspRequest::from_der(&der).expect("OCSP request DER round-trips");
         assert_eq!(decoded.tbs_request.version, Version::V1);
         assert_eq!(decoded.tbs_request.request_list.len(), 1);
     }
@@ -288,7 +288,9 @@ mod tests {
     #[test]
     fn status_enum_is_exhaustive() {
         let _ = OcspStatus::Good;
-        let _ = OcspStatus::Revoked { reason_code: Some(1) };
+        let _ = OcspStatus::Revoked {
+            reason_code: Some(1),
+        };
         let _ = OcspStatus::Revoked { reason_code: None };
         let _ = OcspStatus::Unknown;
     }

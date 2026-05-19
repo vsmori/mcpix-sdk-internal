@@ -13,7 +13,7 @@ use rusqlite::{params, Connection};
 
 use mcpix_core::error::McpixError;
 use mcpix_core::traits::SeedStore;
-use mcpix_core::types::{C2, C2_TRANSPORT_LEN, RetainedReceipt, Seed, SeedId};
+use mcpix_core::types::{RetainedReceipt, Seed, SeedId, C2, C2_TRANSPORT_LEN};
 
 pub struct SqliteSeedStore {
     conn: Mutex<Connection>,
@@ -22,14 +22,18 @@ pub struct SqliteSeedStore {
 impl SqliteSeedStore {
     pub fn open_in_memory() -> Result<Self, McpixError> {
         let conn = Connection::open_in_memory().map_err(map_err)?;
-        let store = Self { conn: Mutex::new(conn) };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.init_schema()?;
         Ok(store)
     }
 
     pub fn open(path: &str) -> Result<Self, McpixError> {
         let conn = Connection::open(path).map_err(map_err)?;
-        let store = Self { conn: Mutex::new(conn) };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.init_schema()?;
         Ok(store)
     }
@@ -78,9 +82,7 @@ impl SeedStore for SqliteSeedStore {
         let mut stmt = g
             .prepare("SELECT material FROM seeds WHERE seed_id = ?1")
             .map_err(map_err)?;
-        let mut rows = stmt
-            .query(params![seed_id.as_str()])
-            .map_err(map_err)?;
+        let mut rows = stmt.query(params![seed_id.as_str()]).map_err(map_err)?;
         match rows.next().map_err(map_err)? {
             Some(row) => {
                 let bytes: Vec<u8> = row.get(0).map_err(map_err)?;
@@ -130,7 +132,9 @@ impl SeedStore for SqliteSeedStore {
                 if c2.len() != C2_TRANSPORT_LEN {
                     return Err(McpixError::Storage("malformed C2 in row".into()));
                 }
-                let c2 = C2::parse(std::str::from_utf8(&c2).map_err(|e| McpixError::Storage(e.to_string()))?)?;
+                let c2 = C2::parse(
+                    std::str::from_utf8(&c2).map_err(|e| McpixError::Storage(e.to_string()))?,
+                )?;
                 Ok(Some(RetainedReceipt {
                     seed_id: seed_id.clone(),
                     counter,
@@ -175,11 +179,18 @@ mod tests {
 
         let outcome = apply_generate_charge(
             &seed,
-            GenerateChargeCommand { seed_id: sid.clone(), counter: 42, amount_cents: 7 },
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 42,
+                amount_cents: 7,
+            },
         );
         store.save_receipt(outcome.retained.clone()).unwrap();
         let got = store.get_receipt(&sid, 42).unwrap().unwrap();
-        assert_eq!(got.expected_c2.as_str(), outcome.retained.expected_c2.as_str());
+        assert_eq!(
+            got.expected_c2.as_str(),
+            outcome.retained.expected_c2.as_str()
+        );
         assert!(!got.consumed);
 
         store.mark_consumed(&sid, 42).unwrap();

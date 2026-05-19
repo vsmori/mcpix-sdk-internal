@@ -22,7 +22,9 @@ use std::sync::Arc;
 use mcpix_bank_receiver::http_client::HttpBankReceiver;
 use mcpix_bank_receiver::mtls::extract_institution_id;
 use mcpix_bank_receiver::mtls_client::{build_mtls_client, MtlsClientMaterial};
-use mcpix_bank_receiver::mtls_server::{build_server_config, build_server_config_full, serve_mtls, ServerTlsConfig};
+use mcpix_bank_receiver::mtls_server::{
+    build_server_config, build_server_config_full, serve_mtls, ServerTlsConfig,
+};
 use mcpix_bank_receiver::{BankReceiver, InMemoryBankReceiver, Requester};
 use mcpix_core::types::{Seed, SeedId};
 
@@ -41,8 +43,8 @@ struct Pki {
 
 fn build_pki() -> Pki {
     use rcgen::{
-        CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
-        KeyUsagePurpose, SanType, SerialNumber,
+        CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+        SanType, SerialNumber,
     };
 
     // Serials explícitos — necessários para construir CRLs apontando para
@@ -69,8 +71,7 @@ fn build_pki() -> Pki {
     let issuer = Issuer::from_params(&ca_params, &ca_kp);
 
     // ── Server cert (SAN: DNS=localhost, IP=127.0.0.1) ─────────────────
-    let mut srv_params =
-        CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+    let mut srv_params = CertificateParams::new(vec!["localhost".to_string()]).unwrap();
     srv_params.serial_number = Some(server_serial.clone());
     srv_params.subject_alt_names = vec![
         SanType::DnsName("localhost".try_into().unwrap()),
@@ -89,9 +90,7 @@ fn build_pki() -> Pki {
     let mut cli_params = CertificateParams::new(Vec::<String>::new()).unwrap();
     cli_params.serial_number = Some(client_serial.clone());
     cli_params.subject_alt_names = vec![SanType::URI(
-        "urn:mcpix:institution:BANK_PAYER"
-            .try_into()
-            .unwrap(),
+        "urn:mcpix:institution:BANK_PAYER".try_into().unwrap(),
     )];
     cli_params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
     let mut cli_dn = rcgen::DistinguishedName::new();
@@ -121,8 +120,8 @@ fn build_pki() -> Pki {
 /// fornecidos. Janela `this_update..next_update` de 24h.
 fn build_crl_pem(pki: &Pki, revoked_serials: &[rcgen::SerialNumber]) -> Vec<u8> {
     use rcgen::{
-        CertificateRevocationListParams, Issuer, KeyIdMethod, RevocationReason,
-        RevokedCertParams, SerialNumber,
+        CertificateRevocationListParams, Issuer, KeyIdMethod, RevocationReason, RevokedCertParams,
+        SerialNumber,
     };
     use time::{Duration, OffsetDateTime};
 

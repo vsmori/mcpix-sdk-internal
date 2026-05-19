@@ -8,7 +8,7 @@
 use crate::crypto::{derive_c2_from_c1, derive_pair, verify_c2};
 use crate::error::McpixError;
 use crate::transport_field;
-use crate::types::{C1, C2, Charge, RetainedReceipt, Seed, SeedId};
+use crate::types::{Charge, RetainedReceipt, Seed, SeedId, C1, C2};
 
 /// Comando "gerar nova cobrança": entrada do recebedor.
 #[derive(Clone, Debug)]
@@ -61,10 +61,7 @@ pub enum ValidationOutcome {
 /// recuperado `retained` da `SeedStore`. Após `Valid`, é responsabilidade do
 /// caller marcar o `RetainedReceipt` como consumido (atomicamente, para evitar
 /// race com nova apresentação).
-pub fn apply_validate_receipt(
-    retained: &RetainedReceipt,
-    presented: &C2,
-) -> ValidationOutcome {
+pub fn apply_validate_receipt(retained: &RetainedReceipt, presented: &C2) -> ValidationOutcome {
     if retained.consumed {
         return ValidationOutcome::Replay;
     }
@@ -77,17 +74,16 @@ pub fn apply_validate_receipt(
 
 /// Caminho do banco do pagador: a partir do campo público + semente recuperada
 /// no banco recebedor, recompõe `C₂` (substituição institucional).
-pub fn apply_recover_c2(
-    seed: &Seed,
-    counter: u64,
-    c1: &C1,
-) -> C2 {
+pub fn apply_recover_c2(seed: &Seed, counter: u64, c1: &C1) -> C2 {
     derive_c2_from_c1(seed, counter, c1)
 }
 
 /// Saneamento: valida coerência entre o campo recebido (parse) e o `SeedId`
 /// esperado. Útil quando o banco do pagador faz dupla checagem após lookup.
-pub fn ensure_seed_id_matches(field_seed_id: &SeedId, lookup_seed_id: &SeedId) -> Result<(), McpixError> {
+pub fn ensure_seed_id_matches(
+    field_seed_id: &SeedId,
+    lookup_seed_id: &SeedId,
+) -> Result<(), McpixError> {
     if field_seed_id == lookup_seed_id {
         Ok(())
     } else {
@@ -116,31 +112,43 @@ mod tests {
 
         // banco do pagador recompõe C2 a partir do que veio público:
         let c2_recovered = apply_recover_c2(&seed(), outcome.retained.counter, &parsed.c1);
-        assert_eq!(apply_validate_receipt(&outcome.retained, &c2_recovered),
-                   ValidationOutcome::Valid);
+        assert_eq!(
+            apply_validate_receipt(&outcome.retained, &c2_recovered),
+            ValidationOutcome::Valid
+        );
     }
 
     #[test]
     fn validation_rejects_wrong_c2() {
-        let outcome = apply_generate_charge(&seed(), GenerateChargeCommand {
-            seed_id: SeedId::new("R1").unwrap(),
-            counter: 1,
-            amount_cents: 1,
-        });
+        let outcome = apply_generate_charge(
+            &seed(),
+            GenerateChargeCommand {
+                seed_id: SeedId::new("R1").unwrap(),
+                counter: 1,
+                amount_cents: 1,
+            },
+        );
         let bogus = C2::parse("AAAAAAAAAAA").unwrap();
-        assert_eq!(apply_validate_receipt(&outcome.retained, &bogus),
-                   ValidationOutcome::Mismatch);
+        assert_eq!(
+            apply_validate_receipt(&outcome.retained, &bogus),
+            ValidationOutcome::Mismatch
+        );
     }
 
     #[test]
     fn validation_rejects_replay() {
-        let mut outcome = apply_generate_charge(&seed(), GenerateChargeCommand {
-            seed_id: SeedId::new("R1").unwrap(),
-            counter: 1,
-            amount_cents: 1,
-        });
+        let mut outcome = apply_generate_charge(
+            &seed(),
+            GenerateChargeCommand {
+                seed_id: SeedId::new("R1").unwrap(),
+                counter: 1,
+                amount_cents: 1,
+            },
+        );
         outcome.retained.consumed = true;
-        assert_eq!(apply_validate_receipt(&outcome.retained, &outcome.retained.expected_c2.clone()),
-                   ValidationOutcome::Replay);
+        assert_eq!(
+            apply_validate_receipt(&outcome.retained, &outcome.retained.expected_c2.clone()),
+            ValidationOutcome::Replay
+        );
     }
 }

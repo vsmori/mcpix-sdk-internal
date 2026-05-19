@@ -83,9 +83,7 @@ pub fn write_header(
     buf[35..47].copy_from_slice(nonce);
 }
 
-pub fn read_header(
-    buf: &[u8; HEADER_LEN],
-) -> Result<(KdfParams, [u8; 16], [u8; 12]), BackupError> {
+pub fn read_header(buf: &[u8; HEADER_LEN]) -> Result<(KdfParams, [u8; 16], [u8; 12]), BackupError> {
     if buf[0..4] != MAGIC {
         return Err(BackupError::Malformed);
     }

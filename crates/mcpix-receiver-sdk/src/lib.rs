@@ -51,7 +51,11 @@ impl ReceiverSdk {
         counter: Arc<dyn Counter>,
         rng: Arc<dyn SecureRandom>,
     ) -> Self {
-        Self { store, counter, rng }
+        Self {
+            store,
+            counter,
+            rng,
+        }
     }
 
     /// Cadastra um recebedor: gera semente local e grava no store.
@@ -148,7 +152,11 @@ mod tests {
         // No fluxo real C₂ chega via comprovante do pagador. Como ainda não
         // integramos o bank-payer-mock, simulamos apresentando o esperado.
         let outcome = sdk
-            .validate_receipt(&proof.seed_id, charge.counter, retained.expected_c2.as_str())
+            .validate_receipt(
+                &proof.seed_id,
+                charge.counter,
+                retained.expected_c2.as_str(),
+            )
             .unwrap();
         assert_eq!(outcome, ValidationOutcome::Valid);
     }
@@ -164,11 +172,13 @@ mod tests {
             .unwrap();
         let c2 = retained.expected_c2.as_str().to_string();
         assert_eq!(
-            sdk.validate_receipt(&proof.seed_id, charge.counter, &c2).unwrap(),
+            sdk.validate_receipt(&proof.seed_id, charge.counter, &c2)
+                .unwrap(),
             ValidationOutcome::Valid
         );
         assert_eq!(
-            sdk.validate_receipt(&proof.seed_id, charge.counter, &c2).unwrap(),
+            sdk.validate_receipt(&proof.seed_id, charge.counter, &c2)
+                .unwrap(),
             ValidationOutcome::Replay
         );
     }

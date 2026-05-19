@@ -35,7 +35,10 @@ fn locate_self() -> Result<PathBuf, McpixError> {
 /// 1. Mesmo diretório do binário
 /// 2. `../` (caso típico: `linux-x86_64/lib.so` ao lado de `SHA256SUMS` na raiz `dist/`)
 fn locate_sums(binary_path: &Path) -> Option<(PathBuf, PathBuf)> {
-    let parents = [binary_path.parent(), binary_path.parent().and_then(|p| p.parent())];
+    let parents = [
+        binary_path.parent(),
+        binary_path.parent().and_then(|p| p.parent()),
+    ];
     for parent in parents.into_iter().flatten() {
         let sums = parent.join("SHA256SUMS");
         let sig = parent.join("SHA256SUMS.sig");

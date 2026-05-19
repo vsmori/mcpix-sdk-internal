@@ -62,7 +62,10 @@ impl SeedId {
         if bytes.is_empty() || bytes.len() > SEED_ID_MAX_LEN {
             return Err(EmbedError::SeedIdLength(bytes.len()));
         }
-        if !bytes.iter().all(|b| b.is_ascii_alphanumeric() && *b != b'0') {
+        if !bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() && *b != b'0')
+        {
             return Err(EmbedError::SeedIdCharset);
         }
         let mut buf = heapless::Vec::new();

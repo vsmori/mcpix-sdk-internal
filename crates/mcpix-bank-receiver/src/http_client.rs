@@ -33,7 +33,10 @@ impl HttpBankReceiver {
         while url.ends_with('/') {
             url.pop();
         }
-        Self { base_url: url, client }
+        Self {
+            base_url: url,
+            client,
+        }
     }
 
     fn seed_url(&self, seed_id: &SeedId) -> String {
@@ -63,11 +66,7 @@ impl BankReceiver for HttpBankReceiver {
         Ok(())
     }
 
-    fn lookup_seed(
-        &self,
-        seed_id: &SeedId,
-        requester: &Requester,
-    ) -> Result<Seed, McpixError> {
+    fn lookup_seed(&self, seed_id: &SeedId, requester: &Requester) -> Result<Seed, McpixError> {
         let resp = self
             .client
             .get(self.seed_url(seed_id))

@@ -29,7 +29,10 @@ pub enum IntegrityCheck {
     /// Hash do arquivo coincide com o esperado.
     Verified,
     /// Hash não coincide — possível adulteração. Caller deve abortar.
-    Tampered { expected: [u8; 32], actual: [u8; 32] },
+    Tampered {
+        expected: [u8; 32],
+        actual: [u8; 32],
+    },
     /// Hash esperado não foi embarcado neste build (dev mode).
     Skipped,
 }
@@ -69,8 +72,7 @@ pub fn verify_bytes(
     let mut expected = [0u8; 32];
     for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
         let s = core::str::from_utf8(chunk).map_err(|e| McpixError::Storage(e.to_string()))?;
-        expected[i] =
-            u8::from_str_radix(s, 16).map_err(|e| McpixError::Storage(e.to_string()))?;
+        expected[i] = u8::from_str_radix(s, 16).map_err(|e| McpixError::Storage(e.to_string()))?;
     }
     let actual = sha256(actual_bytes);
     if expected == actual {
@@ -89,7 +91,10 @@ mod tests {
         // "abc" → ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
         let h = sha256(b"abc");
         let hex: String = h.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(
+            hex,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 
     #[test]
@@ -114,7 +119,10 @@ mod tests {
     fn verify_detects_tampering() {
         let original = b"the SDK bytes";
         let tampered = b"the SDK byteS"; // 1-byte flip
-        let hex: String = sha256(original).iter().map(|b| format!("{b:02x}")).collect();
+        let hex: String = sha256(original)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
         match verify_bytes(tampered, Some(&hex)).unwrap() {
             IntegrityCheck::Tampered { .. } => {}
             other => panic!("expected Tampered, got {other:?}"),

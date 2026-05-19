@@ -70,9 +70,8 @@ pub fn build_mtls_client(
 fn build_mtls_client_legacy(
     material: &MtlsClientMaterial,
 ) -> Result<reqwest::blocking::Client, McpixError> {
-    let mut id_pem = Vec::with_capacity(
-        material.client_cert_pem.len() + material.client_key_pem.len() + 1,
-    );
+    let mut id_pem =
+        Vec::with_capacity(material.client_cert_pem.len() + material.client_key_pem.len() + 1);
     id_pem.extend_from_slice(&material.client_cert_pem);
     if !id_pem.ends_with(b"\n") {
         id_pem.push(b'\n');

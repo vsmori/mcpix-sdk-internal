@@ -19,7 +19,7 @@ use mcpix_bank_receiver::{BankReceiver, Requester};
 use mcpix_core::error::McpixError;
 use mcpix_core::state::apply_recover_c2;
 use mcpix_core::transport_field::{self, is_protocol_field};
-use mcpix_core::types::{C2, SeedId};
+use mcpix_core::types::{SeedId, C2};
 
 /// Comprovante estruturado devolvido pelo banco do pagador ao pagador. Em
 /// produção, este é o objeto que viajaria como recibo PIX/SPI. O campo
@@ -90,10 +90,7 @@ impl<'a> PayerBankMock<'a> {
         Self { bank_receiver }
     }
 
-    pub fn process_payment(
-        &self,
-        req: PaymentRequest<'_>,
-    ) -> Result<PaymentReceipt, McpixError> {
+    pub fn process_payment(&self, req: PaymentRequest<'_>) -> Result<PaymentReceipt, McpixError> {
         if !is_protocol_field(req.instrument_string) {
             return Err(McpixError::TransportFieldPrefix);
         }
@@ -163,7 +160,11 @@ mod tests {
 
         let outcome = apply_generate_charge(
             &seed,
-            GenerateChargeCommand { seed_id: sid.clone(), counter: 5, amount_cents: 1000 },
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 5,
+                amount_cents: 1000,
+            },
         );
 
         let payer_bank = PayerBankMock::new(&bank_r);
@@ -172,7 +173,9 @@ mod tests {
                 instrument_string: &outcome.charge.transport_field,
                 amount_cents: 1000,
                 counter: 5,
-                requester: Requester { institution_id: "PAYER".into() },
+                requester: Requester {
+                    institution_id: "PAYER".into(),
+                },
             })
             .unwrap();
 
@@ -188,7 +191,9 @@ mod tests {
                 instrument_string: "OTHERSCHEMA000000000000000000000000",
                 amount_cents: 1,
                 counter: 1,
-                requester: Requester { institution_id: "PAYER".into() },
+                requester: Requester {
+                    institution_id: "PAYER".into(),
+                },
             })
             .unwrap_err();
         assert_eq!(err, McpixError::TransportFieldPrefix);
@@ -204,7 +209,11 @@ mod tests {
         // Recebedor emitiu com T=100 (quantum específico).
         let outcome = apply_generate_charge(
             &seed,
-            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 100,
+                amount_cents: 50,
+            },
         );
 
         let payer_bank = PayerBankMock::new(&bank_r);
@@ -215,7 +224,9 @@ mod tests {
                 amount_cents: 50,
                 current_quantum: 100,
                 tolerance_windows: 1,
-                requester: Requester { institution_id: "PAYER".into() },
+                requester: Requester {
+                    institution_id: "PAYER".into(),
+                },
             })
             .unwrap();
 
@@ -235,7 +246,11 @@ mod tests {
         // Recebedor emitiu com T=100; banco está atrasado 1 quantum (T=99).
         let outcome = apply_generate_charge(
             &seed,
-            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 100,
+                amount_cents: 50,
+            },
         );
         let payer_bank = PayerBankMock::new(&bank_r);
         let receipt = payer_bank
@@ -244,7 +259,9 @@ mod tests {
                 amount_cents: 50,
                 current_quantum: 99,
                 tolerance_windows: 1,
-                requester: Requester { institution_id: "PAYER".into() },
+                requester: Requester {
+                    institution_id: "PAYER".into(),
+                },
             })
             .unwrap();
 
@@ -253,7 +270,10 @@ mod tests {
             .candidates
             .iter()
             .any(|(t, c2)| *t == 100 && c2 == outcome.retained.expected_c2.as_str());
-        assert!(matched, "candidate set should include T=100 within ±1 window");
+        assert!(
+            matched,
+            "candidate set should include T=100 within ±1 window"
+        );
     }
 
     #[test]
@@ -265,7 +285,11 @@ mod tests {
 
         let outcome = apply_generate_charge(
             &seed,
-            GenerateChargeCommand { seed_id: sid.clone(), counter: 100, amount_cents: 50 },
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 100,
+                amount_cents: 50,
+            },
         );
         let payer_bank = PayerBankMock::new(&bank_r);
         // Banco com clock 5 quanta adiantado, tolerância apenas ±1.
@@ -275,7 +299,9 @@ mod tests {
                 amount_cents: 50,
                 current_quantum: 105,
                 tolerance_windows: 1,
-                requester: Requester { institution_id: "PAYER".into() },
+                requester: Requester {
+                    institution_id: "PAYER".into(),
+                },
             })
             .unwrap();
 

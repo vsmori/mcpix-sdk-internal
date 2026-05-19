@@ -77,7 +77,10 @@ impl SeedId {
                 got: value.len(),
             });
         }
-        if !value.bytes().all(|b| b.is_ascii_alphanumeric() && b != b'0') {
+        if !value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() && b != b'0')
+        {
             return Err(McpixError::SeedIdCharset);
         }
         Ok(Self(value))

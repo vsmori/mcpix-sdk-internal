@@ -54,8 +54,7 @@ fn signed_manifest_verifies_against_release_pubkey() {
     let sig = read_dist("SHA256SUMS.sig");
     let hex: String = sha256(&bytes).iter().map(|b| format!("{b:02x}")).collect();
 
-    let outcome =
-        verify_combined(&sums, &sig, RELEASE_PUBKEY, "libmcpix_uniffi.so", &hex).unwrap();
+    let outcome = verify_combined(&sums, &sig, RELEASE_PUBKEY, "libmcpix_uniffi.so", &hex).unwrap();
     assert_eq!(outcome, SignatureCheck::Verified);
 }
 
@@ -79,8 +78,14 @@ fn signed_manifest_detects_tampered_sums() {
     let sig = read_dist("SHA256SUMS.sig");
     // Adultera 1 byte do SUMS — assinatura tem que falhar
     sums[0] ^= 0x01;
-    match verify_combined(&sums, &sig, RELEASE_PUBKEY, "libmcpix_uniffi.so", &"00".repeat(32))
-        .unwrap()
+    match verify_combined(
+        &sums,
+        &sig,
+        RELEASE_PUBKEY,
+        "libmcpix_uniffi.so",
+        &"00".repeat(32),
+    )
+    .unwrap()
     {
         SignatureCheck::InvalidSignature => {}
         other => panic!("expected InvalidSignature, got {other:?}"),

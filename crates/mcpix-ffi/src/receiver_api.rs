@@ -7,12 +7,12 @@
 use std::os::raw::c_char;
 use std::sync::Arc;
 
-use mcpix_receiver_sdk::{
-    memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter,
-    system_random::OsRandom, ReceiverSdk,
-};
 use mcpix_core::state::ValidationOutcome;
 use mcpix_core::types::SeedId;
+use mcpix_receiver_sdk::{
+    memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter, system_random::OsRandom,
+    ReceiverSdk,
+};
 
 use crate::error::McpixStatus;
 use crate::handle::{guard, guard_mut};
@@ -56,9 +56,7 @@ impl From<ValidationOutcome> for McpixValidation {
 /// # Safety
 /// `out_handle` precisa apontar para um `*mut McpixReceiver` válido.
 #[no_mangle]
-pub unsafe extern "C" fn mcpix_receiver_new(
-    out_handle: *mut *mut McpixReceiver,
-) -> McpixStatus {
+pub unsafe extern "C" fn mcpix_receiver_new(out_handle: *mut *mut McpixReceiver) -> McpixStatus {
     guard(|| {
         if out_handle.is_null() {
             return McpixStatus::InvalidArgument;
@@ -211,10 +209,7 @@ mod tests {
     fn ffi_full_flow() {
         unsafe {
             let mut handle: *mut McpixReceiver = std::ptr::null_mut();
-            assert_eq!(
-                mcpix_receiver_new(&mut handle as *mut _),
-                McpixStatus::Ok
-            );
+            assert_eq!(mcpix_receiver_new(&mut handle as *mut _), McpixStatus::Ok);
             assert!(!handle.is_null());
 
             let sid = cstr("R1");
@@ -243,4 +238,3 @@ mod tests {
         }
     }
 }
-

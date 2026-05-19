@@ -136,10 +136,7 @@ mod tests {
     #[test]
     fn extracts_institution_from_san_uri() {
         let der = make_cert_with_uri_san("urn:mcpix:institution:BANK_PAYER_42");
-        assert_eq!(
-            extract_institution_id(&der).unwrap(),
-            "BANK_PAYER_42"
-        );
+        assert_eq!(extract_institution_id(&der).unwrap(), "BANK_PAYER_42");
     }
 
     #[test]

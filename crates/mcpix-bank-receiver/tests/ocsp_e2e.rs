@@ -84,7 +84,9 @@ async fn boot_mock_responder(
         last_request: last_request.clone(),
         response_bytes: Arc::new(canned_response),
     };
-    let app = Router::new().route("/ocsp", post(ocsp_handler)).with_state(state);
+    let app = Router::new()
+        .route("/ocsp", post(ocsp_handler))
+        .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (tx, rx) = oneshot::channel::<()>();

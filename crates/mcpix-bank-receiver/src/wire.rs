@@ -6,8 +6,8 @@
 //! (mTLS no termination ou Bearer token no header — adicionada em sessão
 //! futura, junto com PKI).
 
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
 use mcpix_core::error::McpixError;
 use mcpix_core::types::{Seed, SEED_LEN};
 use serde::{Deserialize, Serialize};

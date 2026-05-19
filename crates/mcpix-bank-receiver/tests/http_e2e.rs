@@ -40,7 +40,12 @@ async fn http_round_trip_register_and_lookup() {
 
         client.register_seed(&sid, seed.clone()).unwrap();
         let got = client
-            .lookup_seed(&sid, &Requester { institution_id: "PAYER".into() })
+            .lookup_seed(
+                &sid,
+                &Requester {
+                    institution_id: "PAYER".into(),
+                },
+            )
             .unwrap();
         got.as_bytes() == seed.as_bytes()
     })
@@ -61,7 +66,9 @@ async fn http_lookup_unknown_seed_returns_typed_error() {
         let client = HttpBankReceiver::new(base);
         client.lookup_seed(
             &SeedId::new("ghost").unwrap(),
-            &Requester { institution_id: "x".into() },
+            &Requester {
+                institution_id: "x".into(),
+            },
         )
     })
     .await
@@ -77,7 +84,9 @@ async fn full_protocol_through_http() {
     // → banco do pagador (que usa HttpBankReceiver) recupera C₂ via HTTP →
     // recebedor valida. Exercita o caminho real Recebedor → HTTP → Banco.
     use mcpix_bank_payer_mock::{PayerBankMock, PaymentRequest};
-    use mcpix_core::state::{apply_generate_charge, GenerateChargeCommand, ValidationOutcome, apply_validate_receipt};
+    use mcpix_core::state::{
+        apply_generate_charge, apply_validate_receipt, GenerateChargeCommand, ValidationOutcome,
+    };
 
     let (addr, shutdown) = boot_server().await;
     let base = format!("http://{addr}");
@@ -89,20 +98,27 @@ async fn full_protocol_through_http() {
         client.register_seed(&sid, seed.clone()).unwrap();
 
         // Recebedor offline produz par.
-        let charge_out = apply_generate_charge(&seed, GenerateChargeCommand {
-            seed_id: sid.clone(),
-            counter: 7,
-            amount_cents: 1234,
-        });
+        let charge_out = apply_generate_charge(
+            &seed,
+            GenerateChargeCommand {
+                seed_id: sid.clone(),
+                counter: 7,
+                amount_cents: 1234,
+            },
+        );
 
         // Banco do pagador (com HttpBankReceiver injetado) processa.
         let payer = PayerBankMock::new(&client);
-        let receipt = payer.process_payment(PaymentRequest {
-            instrument_string: &charge_out.charge.transport_field,
-            amount_cents: 1234,
-            counter: 7,
-            requester: Requester { institution_id: "PAYER_BANK".into() },
-        }).unwrap();
+        let receipt = payer
+            .process_payment(PaymentRequest {
+                instrument_string: &charge_out.charge.transport_field,
+                amount_cents: 1234,
+                counter: 7,
+                requester: Requester {
+                    institution_id: "PAYER_BANK".into(),
+                },
+            })
+            .unwrap();
 
         // Recebedor valida o que o banco devolveu.
         let presented = mcpix_core::types::C2::parse(&receipt.identifier).unwrap();
@@ -149,14 +165,10 @@ async fn http_capabilities_payload_matches_wire_contract() {
     let (addr, shutdown) = boot_server().await;
     let url = format!("http://{addr}/v1/capabilities");
 
-    let body = tokio::task::spawn_blocking(move || {
-        reqwest::blocking::get(url)
-            .unwrap()
-            .text()
-            .unwrap()
-    })
-    .await
-    .unwrap();
+    let body =
+        tokio::task::spawn_blocking(move || reqwest::blocking::get(url).unwrap().text().unwrap())
+            .await
+            .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
     let versions = parsed["versions"].as_array().expect("versions array");
@@ -178,8 +190,7 @@ async fn negotiation_with_real_server_picks_v1() {
         // de "peer suporta versões que este build desconhece"; aqui
         // usamos a versão já filtrada porque cobre o caso comum.
         let peer = client.supported_versions().unwrap();
-        let peer_as_strings: Vec<String> =
-            peer.iter().map(|v| v.prefix().to_string()).collect();
+        let peer_as_strings: Vec<String> = peer.iter().map(|v| v.prefix().to_string()).collect();
         mcpix_core::version::negotiate_version(
             mcpix_core::version::ProtocolVersion::all(),
             &peer_as_strings,

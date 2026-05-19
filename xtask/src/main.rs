@@ -66,10 +66,7 @@ fn copy_into(src: &Path, dst_dir: &Path) -> Result<PathBuf, String> {
 }
 
 fn target_dir(target: &str, profile: &str) -> PathBuf {
-    workspace_root()
-        .join("target")
-        .join(target)
-        .join(profile)
+    workspace_root().join("target").join(target).join(profile)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +76,9 @@ fn target_dir(target: &str, profile: &str) -> PathBuf {
 fn cdylib_path(root: &Path, crate_name: &str) -> PathBuf {
     let lib_name = crate_name.replace('-', "_");
     for ext in ["so", "dylib", "dll"] {
-        let p = root.join("target/debug").join(format!("lib{lib_name}.{ext}"));
+        let p = root
+            .join("target/debug")
+            .join(format!("lib{lib_name}.{ext}"));
         if p.exists() {
             return p;
         }
@@ -101,24 +100,39 @@ fn gen_bindings(root: &Path) -> Result<(), String> {
 
     run(cargo()
         .arg("build")
-        .arg("-p").arg("mcpix-uniffi")
-        .arg("-p").arg("mcpix-ffi"))?;
+        .arg("-p")
+        .arg("mcpix-uniffi")
+        .arg("-p")
+        .arg("mcpix-ffi"))?;
 
     let uniffi_lib = cdylib_path(root, "mcpix_uniffi");
     if !uniffi_lib.exists() {
         return Err(format!("uniffi cdylib not found: {}", uniffi_lib.display()));
     }
     for lang in ["swift", "kotlin"] {
-        let out = if lang == "swift" { &swift_out } else { &kotlin_out };
+        let out = if lang == "swift" {
+            &swift_out
+        } else {
+            &kotlin_out
+        };
         run(cargo()
-            .arg("run").arg("-p").arg("uniffi-bindgen").arg("--")
+            .arg("run")
+            .arg("-p")
+            .arg("uniffi-bindgen")
+            .arg("--")
             .arg("generate")
-            .arg("--library").arg(&uniffi_lib)
-            .arg("--language").arg(lang)
-            .arg("--out-dir").arg(out))?;
+            .arg("--library")
+            .arg(&uniffi_lib)
+            .arg("--language")
+            .arg(lang)
+            .arg("--out-dir")
+            .arg(out))?;
     }
     run(cargo().arg("build").arg("-p").arg("mcpix-ffi"))?;
-    eprintln!("bindings regenerados em {}", root.join("bindings").display());
+    eprintln!(
+        "bindings regenerados em {}",
+        root.join("bindings").display()
+    );
     Ok(())
 }
 
@@ -143,7 +157,10 @@ fn check_bindings(root: &Path) -> Result<(), String> {
 /// `MCPIX_EXPECTED_SHA256` que será injetada no binário para o self-check.
 fn build_target(target: &str, packages: &[&str]) -> Result<(), String> {
     let mut cmd = cargo();
-    cmd.arg("build").arg("--release").arg("--target").arg(target);
+    cmd.arg("build")
+        .arg("--release")
+        .arg("--target")
+        .arg(target);
     for p in packages {
         cmd.arg("-p").arg(p);
     }
@@ -193,12 +210,18 @@ fn build_android(root: &Path) -> Result<(), String> {
         cmd.arg("-t").arg(abi);
     }
     cmd.arg("-o").arg(dist_dir().join("android/jniLibs"));
-    cmd.arg("--").arg("build").arg("--release")
-        .arg("-p").arg("mcpix-uniffi");
+    cmd.arg("--")
+        .arg("build")
+        .arg("--release")
+        .arg("-p")
+        .arg("mcpix-uniffi");
     run(&mut cmd)?;
     // Header C também vai para o pacote AAR (para integradores nativos).
     let out = dist_dir().join("android");
-    copy_into(&root.join("bindings/c/include/mcpix.h"), &out.join("include"))?;
+    copy_into(
+        &root.join("bindings/c/include/mcpix.h"),
+        &out.join("include"),
+    )?;
     Ok(())
 }
 
@@ -233,8 +256,10 @@ fn package_xcframework(root: &Path) -> Result<(), String> {
     let sim_combined = out.join("libmcpix_uniffi-sim.a");
     run(Command::new("lipo")
         .arg("-create")
-        .arg(&sim_arm_a).arg(&sim_x86_a)
-        .arg("-output").arg(&sim_combined))?;
+        .arg(&sim_arm_a)
+        .arg(&sim_x86_a)
+        .arg("-output")
+        .arg(&sim_combined))?;
 
     let headers = root.join("bindings/swift/Sources/MCPixSDK");
     let xcfwk = out.join("MCPixSDKFFI.xcframework");
@@ -243,9 +268,16 @@ fn package_xcframework(root: &Path) -> Result<(), String> {
     }
     run(Command::new("xcodebuild")
         .arg("-create-xcframework")
-        .arg("-library").arg(&device_a).arg("-headers").arg(&headers)
-        .arg("-library").arg(&sim_combined).arg("-headers").arg(&headers)
-        .arg("-output").arg(&xcfwk))?;
+        .arg("-library")
+        .arg(&device_a)
+        .arg("-headers")
+        .arg(&headers)
+        .arg("-library")
+        .arg(&sim_combined)
+        .arg("-headers")
+        .arg(&headers)
+        .arg("-output")
+        .arg(&xcfwk))?;
     Ok(())
 }
 
@@ -287,8 +319,10 @@ fn package_nuget(root: &Path) -> Result<(), String> {
     run(Command::new("dotnet")
         .arg("pack")
         .arg(&csproj)
-        .arg("-c").arg("Release")
-        .arg("-o").arg(dist_dir().join("nuget")))?;
+        .arg("-c")
+        .arg("Release")
+        .arg("-o")
+        .arg(dist_dir().join("nuget")))?;
     Ok(())
 }
 
@@ -299,7 +333,8 @@ fn build_all(root: &Path) -> Result<(), String> {
     let _ = build_android(root).map_err(|e| eprintln!("warning: android skipped: {e}"));
     if cfg!(target_os = "macos") {
         let _ = build_ios(root).map_err(|e| eprintln!("warning: ios skipped: {e}"));
-        let _ = package_xcframework(root).map_err(|e| eprintln!("warning: xcframework skipped: {e}"));
+        let _ =
+            package_xcframework(root).map_err(|e| eprintln!("warning: xcframework skipped: {e}"));
     }
     Ok(())
 }
@@ -328,8 +363,7 @@ fn hash_artifacts(_root: &Path) -> Result<(), String> {
         Ok(())
     })?;
     lines.sort();
-    fs::write(dist.join("SHA256SUMS"), lines.join("\n") + "\n")
-        .map_err(|e| e.to_string())?;
+    fs::write(dist.join("SHA256SUMS"), lines.join("\n") + "\n").map_err(|e| e.to_string())?;
     eprintln!("dist/SHA256SUMS atualizado ({} entradas)", lines.len());
     Ok(())
 }
@@ -406,7 +440,8 @@ fn sign_artifacts(_root: &Path) -> Result<(), String> {
     }
     let key_hex = env::var("MCPIX_SIGN_PRIVKEY_HEX").map_err(|_| {
         "MCPIX_SIGN_PRIVKEY_HEX env var unset — pass the 64-char hex seed of the \
-         release private key (in CI: from secret)".to_string()
+         release private key (in CI: from secret)"
+            .to_string()
     })?;
     if key_hex.len() != 64 {
         return Err(format!(
@@ -440,10 +475,16 @@ fn print_help() {
     println!("COMMANDS:");
     println!("  gen-bindings         Regenerate bindings/c, bindings/swift, bindings/kotlin");
     println!("  check-bindings       Regenerate and fail if there is git drift");
-    println!("  build-linux          Release build for x86_64-unknown-linux-gnu → dist/linux-x86_64");
-    println!("  build-windows        Release build for x86_64-pc-windows-gnu → dist/windows-x86_64");
+    println!(
+        "  build-linux          Release build for x86_64-unknown-linux-gnu → dist/linux-x86_64"
+    );
+    println!(
+        "  build-windows        Release build for x86_64-pc-windows-gnu → dist/windows-x86_64"
+    );
     println!("  build-android        4-ABI Android via cargo-ndk → dist/android/jniLibs");
-    println!("  build-ios            iOS device + simulator (macOS only) → target/aarch64-apple-ios/...");
+    println!(
+        "  build-ios            iOS device + simulator (macOS only) → target/aarch64-apple-ios/..."
+    );
     println!("  package-aar          Bundle jniLibs into an .aar via Gradle");
     println!("  package-xcframework  Bundle iOS .a into MCPixSDKFFI.xcframework (macOS only)");
     println!("  package-nuget        Pack .nupkg via dotnet pack");
@@ -473,8 +514,7 @@ fn verify_hermetic(root: &Path) -> Result<(), String> {
 
     println!("[1/3] cargo vendor (esta etapa baixa toda a árvore de deps)");
     let vendor_config_path = root.join(".cargo/config.hermetic.toml");
-    std::fs::create_dir_all(root.join(".cargo"))
-        .map_err(|e| format!("mkdir .cargo: {e}"))?;
+    std::fs::create_dir_all(root.join(".cargo")).map_err(|e| format!("mkdir .cargo: {e}"))?;
     let output = std::process::Command::new(&cargo)
         .args(["vendor", "--locked", "vendor"])
         .current_dir(root)
@@ -542,7 +582,15 @@ fn fuzz_replay(root: &Path) -> Result<(), String> {
     // não quebra invocações externas.
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let status = std::process::Command::new(&cargo)
-        .args(["test", "-p", "mcpix-core", "--test", "corpus_replay", "--", "--nocapture"])
+        .args([
+            "test",
+            "-p",
+            "mcpix-core",
+            "--test",
+            "corpus_replay",
+            "--",
+            "--nocapture",
+        ])
         .current_dir(root)
         .status()
         .map_err(|e| format!("cargo test: {e}"))?;
@@ -573,10 +621,12 @@ fn build_wasm(root: &Path) -> Result<(), String> {
 
     // 2. wasm-bindgen --target web --out-dir examples/web-demo/pkg
     //    target/wasm32-unknown-unknown/release/mcpix_wasm.wasm
-    let wasm_input = root
-        .join("target/wasm32-unknown-unknown/release/mcpix_wasm.wasm");
+    let wasm_input = root.join("target/wasm32-unknown-unknown/release/mcpix_wasm.wasm");
     if !wasm_input.exists() {
-        return Err(format!("wasm artifact not found at {}", wasm_input.display()));
+        return Err(format!(
+            "wasm artifact not found at {}",
+            wasm_input.display()
+        ));
     }
     let out_dir = root.join("examples/web-demo/pkg");
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("mkdir pkg/: {e}"))?;

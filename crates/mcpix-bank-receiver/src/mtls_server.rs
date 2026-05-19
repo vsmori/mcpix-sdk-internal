@@ -165,8 +165,7 @@ pub async fn serve_mtls(
     let app = router(bank);
     let rustls_cfg = RustlsConfig::from_config(Arc::new(config));
 
-    let server = axum_server::from_tcp_rustls(std_listener, rustls_cfg)?
-        .handle(handle_clone);
+    let server = axum_server::from_tcp_rustls(std_listener, rustls_cfg)?.handle(handle_clone);
     tokio::spawn(async move {
         let _ = server.serve(app.into_make_service()).await;
     });

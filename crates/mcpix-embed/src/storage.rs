@@ -54,7 +54,7 @@ use core::convert::TryInto;
 use crc::{Crc, CRC_32_ISO_HDLC};
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 
-use crate::types::{C2, C2_LEN, EmbedError, SeedId, SEED_ID_MAX_LEN};
+use crate::types::{EmbedError, SeedId, C2, C2_LEN, SEED_ID_MAX_LEN};
 
 const MAGIC_RETAINED: [u8; 4] = *b"MR01"; // Mcpix Retained v01
 const MAGIC_COUNTER: [u8; 4] = *b"MC01"; // Mcpix Counter v01
@@ -100,11 +100,7 @@ pub struct PersistedCounter {
 // (De)serialização do record do C₂ retido
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn write_retained_record(
-    buf: &mut [u8; SLOT_SIZE],
-    save_seq: u32,
-    receipt: &PersistedReceipt,
-) {
+fn write_retained_record(buf: &mut [u8; SLOT_SIZE], save_seq: u32, receipt: &PersistedReceipt) {
     // Pre-fill com 0xFF (estado pós-erase de NOR; idempotente).
     buf.fill(0xFF);
 
@@ -176,11 +172,7 @@ fn read_retained_record(buf: &[u8; SLOT_SIZE]) -> Option<(u32, PersistedReceipt)
 // (De)serialização do record do counter
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn write_counter_record(
-    buf: &mut [u8; SLOT_SIZE],
-    save_seq: u32,
-    counter: &PersistedCounter,
-) {
+fn write_counter_record(buf: &mut [u8; SLOT_SIZE], save_seq: u32, counter: &PersistedCounter) {
     buf.fill(0xFF);
     buf[0..4].copy_from_slice(&MAGIC_COUNTER);
     buf[4..6].copy_from_slice(&VERSION.to_be_bytes());
@@ -241,7 +233,11 @@ pub struct ReceiptStore<F: NorFlash> {
 
 impl<F: NorFlash> ReceiptStore<F> {
     pub fn new(flash: F, slot_a: u32, slot_b: u32) -> Self {
-        Self { flash, slot_a, slot_b }
+        Self {
+            flash,
+            slot_a,
+            slot_b,
+        }
     }
 
     pub fn free(self) -> F {
@@ -340,7 +336,11 @@ pub struct CounterStore<F: NorFlash> {
 
 impl<F: NorFlash> CounterStore<F> {
     pub fn new(flash: F, slot_a: u32, slot_b: u32) -> Self {
-        Self { flash, slot_a, slot_b }
+        Self {
+            flash,
+            slot_a,
+            slot_b,
+        }
     }
 
     pub fn free(self) -> F {
