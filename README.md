@@ -111,6 +111,23 @@ keyless via Sigstore Fulcio + Rekor (mesma cadeia do `release.yml`,
 documentada em `docs/SLSA.md`).
 
 
+## Exemplos por plataforma
+
+Samples completos consumindo a SDK em cada stack — ponto de partida
+para integradores. Cada um exercita o fluxo do recebedor (register →
+generate → validate). Tabela completa + comandos build/run em
+[`examples/README.md`](examples/README.md):
+
+| Plataforma | Pasta |
+|---|---|
+| Rust host (CLI completa, recebedor+pagador) | [`examples/e2e_demo.rs`](examples/e2e_demo.rs) |
+| Browser (WASM, side-by-side bancos) | [`examples/web-demo/`](examples/web-demo/) |
+| .NET 8 (P/Invoke) | [`examples/dotnet-sample/`](examples/dotnet-sample/) |
+| Kotlin JVM (JNA, CLI) | [`examples/kotlin-jvm-sample/`](examples/kotlin-jvm-sample/) |
+| Android (Activity + AAR) | [`examples/android-sample/`](examples/android-sample/) |
+| iOS (SwiftUI + XCFramework) | [`examples/ios-sample/`](examples/ios-sample/) |
+| Bare-metal Cortex-M4F (`no_std`) | [`embedded/`](embedded/) (apontado por [`examples/embedded-demo/`](examples/embedded-demo/)) |
+
 ## Self-check de integridade (S3 + S4)
 
 Duas camadas de defesa:
