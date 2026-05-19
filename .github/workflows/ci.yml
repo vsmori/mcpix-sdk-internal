@@ -102,11 +102,15 @@ jobs:
       - name: integration test against built artifact (hash only)
         # Os dois primeiros tests do integrity_against_dist exigem só dist/
         # — não precisam de SHA256SUMS.sig nem chave privada.
+        #
+        # Filtros passam APÓS `--` porque `cargo test` aceita só um TESTNAME
+        # posicional; múltiplos filtros vão para libtest (que faz OR
+        # entre substrings).
         run: |
           cargo xtask build-linux
           cargo xtask hash-artifacts
           cargo test -p mcpix-receiver-sdk --test integrity_against_dist \
-            verify_real_artifact verify_detects_tampering -- --ignored
+            -- --ignored verify_real_artifact verify_detects_tampering
 
       - name: integration test with signed manifest (requires release privkey)
         if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
