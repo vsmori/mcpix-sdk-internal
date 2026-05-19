@@ -1,0 +1,9 @@
+# Target padrão deste projeto. `cargo build` daqui já cross-compila.
+[build]
+target = "thumbv7em-none-eabihf"
+
+# Linker script do cortex-m-rt. memory.x define o layout flash/RAM do MCU.
+[target.thumbv7em-none-eabihf]
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]

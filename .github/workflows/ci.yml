@@ -1,0 +1,145 @@
+# CI: validação a cada push/PR.
+# Linux only — testes Rust completos + smoke test Kotlin JVM + check-bindings.
+# Cross-compile e empacotamento estão em release.yml (mais caros).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Rust tests + bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+
+      - name: cargo test (default)
+        run: cargo test --workspace
+
+      - name: cargo test (sqlite feature)
+        run: cargo test -p mcpix-receiver-sdk --features sqlite
+
+      - name: cargo test (sealed-store feature)
+        run: cargo test -p mcpix-receiver-sdk --features sealed-store
+
+      - name: cargo test (HTTP server + client features)
+        run: cargo test -p mcpix-bank-receiver --features http-server,http-client
+
+      - name: cargo test (mTLS feature)
+        run: cargo test -p mcpix-bank-receiver --features mtls
+
+      - name: cargo test (OCSP live query feature)
+        run: cargo test -p mcpix-bank-receiver --features ocsp,http-server
+
+      - name: cargo test (mcpix-embed + qr)
+        run: cargo test -p mcpix-embed --features qr
+
+      - name: cargo test (mcpix-embed + qr + storage)
+        run: cargo test -p mcpix-embed --features qr,storage
+
+      - name: cargo test (mcpix-backup)
+        run: cargo test -p mcpix-backup
+
+      - name: cargo test (backup host↔embed cross-validation)
+        run: cargo test -p mcpix-embed --features restore --test backup_cross_validate
+
+      - name: fuzz corpus replay (deterministic regression suite)
+        # Roda os 266 inputs versionados em fuzz/corpus/ pelos parsers,
+        # garantindo a invariante "nenhum input previamente conhecido
+        # capota o parser nem produz forjamento". Sem nightly, sem
+        # libfuzzer — apenas exercita o corpus como dados.
+        run: cargo xtask fuzz-replay
+
+      - name: install wasm32 target + wasm-bindgen-cli
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.121 --locked
+
+      - name: cargo xtask build-wasm
+        run: cargo xtask build-wasm
+
+      - name: verify wasm bundle size (regression guard)
+        run: |
+          SIZE=$(stat -c%s examples/web-demo/pkg/mcpix_wasm_bg.wasm)
+          echo "wasm size: $SIZE bytes"
+          # Generous cap — catches accidental fat-blob regressions but
+          # doesn't break on minor surface additions.
+          test "$SIZE" -lt 200000 || (echo "wasm bundle exceeded 200KB"; exit 1)
+
+      - name: install bare-metal targets
+        run: |
+          rustup target add thumbv7em-none-eabihf riscv32imc-unknown-none-elf
+
+      - name: build mcpix-embed for Cortex-M4F (no_std, no alloc)
+        run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target thumbv7em-none-eabihf --release
+
+      - name: build mcpix-embed for RISC-V (ESP32-C3 class)
+        run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target riscv32imc-unknown-none-elf --release
+
+      - name: build embedded demo binary + measure size
+        run: |
+          sudo apt-get install -y binutils-arm-none-eabi
+          cd embedded && cargo build --release
+          arm-none-eabi-size target/thumbv7em-none-eabihf/release/mcpix-embed-demo
+
+      - name: integration test against built artifact (hash only)
+        # Os dois primeiros tests do integrity_against_dist exigem só dist/
+        # — não precisam de SHA256SUMS.sig nem chave privada.
+        #
+        # Filtros passam APÓS `--` porque `cargo test` aceita só um TESTNAME
+        # posicional; múltiplos filtros vão para libtest (que faz OR
+        # entre substrings).
+        run: |
+          cargo xtask build-linux
+          cargo xtask hash-artifacts
+          cargo test -p mcpix-receiver-sdk --test integrity_against_dist \
+            -- --ignored verify_real_artifact verify_detects_tampering
+
+      - name: integration test with signed manifest (requires release privkey)
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: |
+          cargo xtask sign-artifacts
+          cargo test -p mcpix-receiver-sdk --test integrity_against_dist \
+            signed_manifest -- --ignored
+
+      - name: check bindings drift
+        run: cargo xtask check-bindings
+
+  kotlin-smoke:
+    name: Kotlin JVM smoke test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: build cdylib
+        run: cargo build -p mcpix-uniffi
+
+      - name: gradle test
+        working-directory: bindings/kotlin
+        run: gradle test --no-daemon

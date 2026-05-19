@@ -1,0 +1,12 @@
+target
+coverage
+
+# `corpus/` é versionada — é o seed corpus do fuzzing que serve também
+# como suite de regressão executada em CI a cada push (ver
+# `crates/mcpix-core/tests/corpus_replay.rs`).
+#
+# `artifacts/` continua ignorada porque são crashes locais
+# *transitórios* — quando algum vier a ser reproduzível, copie para
+# `fuzz/regression/<target>/<descritivo>` e versione manualmente; o
+# replay também passa por essa pasta.
+artifacts

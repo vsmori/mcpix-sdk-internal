@@ -1,0 +1,4 @@
+module mcpix_uniffiFFI {
+    header "mcpix_uniffiFFI.h"
+    export *
+}

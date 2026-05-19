@@ -1,0 +1,307 @@
+# Build manual com seleção de alvo. Dispara apenas via UI/CLI; gera
+# artefatos baixáveis pela aba Actions com label de versão derivado de
+# `Cargo.toml + short SHA`. Opcionalmente anexa SLSA L3 provenance.
+#
+# Diferença vs `release.yml`:
+#  - `release.yml` dispara em push de tag `v*` e publica um GitHub
+#    Release.
+#  - `build.yml` dispara só manualmente, escreve em GHA artifacts
+#    (não-Release), bom para "quero o .so deste commit/branch".
+#
+# Alvos:
+#  - all       → tudo (linux + windows + android + ios + aar + nuget)
+#  - linux     → libmcpix_ffi.so x86_64 Linux
+#  - windows   → mcpix_ffi.dll x86_64 Windows (cross via mingw)
+#  - android   → libmcpix_ffi.so para 4 ABIs (arm64, armv7, x86_64, x86)
+#  - ios       → MCPixSDKFFI.xcframework (device + simulator)
+#  - aar       → android + bundle .aar
+#  - nuget     → linux + windows + bundle .nupkg
+
+name: build (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'O que buildar'
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - windows
+          - android
+          - ios
+          - aar
+          - nuget
+      provenance:
+        description: 'Anexar SLSA L3 provenance (Sigstore + Rekor)'
+        required: true
+        type: boolean
+        default: true
+      retention_days:
+        description: 'Quantos dias guardar os artefatos (max 90)'
+        required: true
+        type: string
+        default: '30'
+
+permissions:
+  contents: read
+  id-token: write   # OIDC para Sigstore keyless (SLSA L3)
+  actions: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────
+  # meta: computa o label de versão usado em todos os nomes de artefato.
+  # Formato: <cargo_version>-<short_sha>  (ex. 0.1.0-abc1234)
+  # Em branch != main, adiciona o nome sanitizado: 0.1.0-feat-x-abc1234
+  # ───────────────────────────────────────────────────────────────────
+  meta:
+    name: compute version label
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.label.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: label
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          sha=$(git rev-parse --short HEAD)
+          ref_clean=$(echo "${GITHUB_REF_NAME}" | tr -c '[:alnum:]_.-' '_' | head -c 32)
+          if [ "${ref_clean}" = "main" ] || [ -z "${ref_clean}" ]; then
+            label="${ver}-${sha}"
+          else
+            label="${ver}-${ref_clean}-${sha}"
+          fi
+          echo "label=${label}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Version label::${label}"
+
+  # ───────────────────────────────────────────────────────────────────
+  # build-linux-windows: roda quando alvo inclui linux/windows/nuget/all.
+  # ───────────────────────────────────────────────────────────────────
+  build-linux-windows:
+    name: linux + windows
+    needs: meta
+    if: inputs.target == 'all' || inputs.target == 'linux' || inputs.target == 'windows' || inputs.target == 'nuget'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
+
+      - name: install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test (default)
+        run: cargo test --workspace
+
+      - name: build linux
+        if: inputs.target == 'all' || inputs.target == 'linux' || inputs.target == 'nuget'
+        run: cargo xtask build-linux
+
+      - name: build windows
+        if: inputs.target == 'all' || inputs.target == 'windows' || inputs.target == 'nuget'
+        run: cargo xtask build-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-linux-windows
+          path: dist/
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+
+  # ───────────────────────────────────────────────────────────────────
+  # build-android: 4 ABIs via cargo-ndk. Roda para android/aar/all.
+  # ───────────────────────────────────────────────────────────────────
+  build-android:
+    name: android (4 ABIs)
+    needs: meta
+    if: inputs.target == 'all' || inputs.target == 'android' || inputs.target == 'aar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-android
+          path: dist/
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+
+  # ───────────────────────────────────────────────────────────────────
+  # build-ios: macOS runner. Só roda quando alvo == ios ou all.
+  # ───────────────────────────────────────────────────────────────────
+  build-ios:
+    name: ios (XCFramework)
+    needs: meta
+    if: inputs.target == 'all' || inputs.target == 'ios'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build ios + xcframework
+        run: |
+          cargo xtask build-ios
+          cargo xtask package-xcframework
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-ios
+          path: dist/
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+
+  # ───────────────────────────────────────────────────────────────────
+  # package-aar: empacota o .aar a partir do android. Só roda se alvo
+  # explícito aar OU all.
+  # ───────────────────────────────────────────────────────────────────
+  package-aar:
+    name: package aar
+    needs: [meta, build-android]
+    if: inputs.target == 'all' || inputs.target == 'aar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+        with: { cmdline-tools-version: 11076708 }
+      - uses: gradle/actions/setup-gradle@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-android
+          path: dist/
+
+      - name: package aar
+        run: cargo xtask package-aar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-aar
+          path: dist/**/*.aar
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+
+  # ───────────────────────────────────────────────────────────────────
+  # package-nuget: empacota o .nupkg a partir de linux + windows.
+  # ───────────────────────────────────────────────────────────────────
+  package-nuget:
+    name: package nuget
+    needs: [meta, build-linux-windows]
+    if: inputs.target == 'all' || inputs.target == 'nuget'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-linux-windows
+          path: dist/
+
+      - name: package nuget
+        run: cargo xtask package-nuget
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpix-${{ needs.meta.outputs.label }}-nuget
+          path: dist/**/*.nupkg
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+
+  # ───────────────────────────────────────────────────────────────────
+  # subjects: agrega todos os artefatos efetivamente buildados e gera
+  # a lista base64 (sha256 path) que vai virar `subjects` da SLSA
+  # provenance. `always() && !failure()` permite rodar mesmo quando
+  # alguns jobs anteriores foram skipped (caso de alvo único).
+  # ───────────────────────────────────────────────────────────────────
+  subjects:
+    name: compute SLSA subjects
+    needs: [meta, build-linux-windows, build-android, build-ios, package-aar, package-nuget]
+    if: |
+      always() && inputs.provenance &&
+      (needs.build-linux-windows.result == 'success' ||
+       needs.build-android.result == 'success' ||
+       needs.build-ios.result == 'success' ||
+       needs.package-aar.result == 'success' ||
+       needs.package-nuget.result == 'success')
+    runs-on: ubuntu-latest
+    outputs:
+      base64-subjects: ${{ steps.s.outputs.base64-subjects }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # Baixa qualquer artefato cujo nome começa com o prefixo deste run.
+          pattern: mcpix-${{ needs.meta.outputs.label }}-*
+          merge-multiple: true
+          path: dist/
+
+      - id: s
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          # Lista canônica de tipos de artefato — bate com o que cada
+          # job acima sobe. SHA256SUMS gerado pelo xtask seria
+          # redundante (já enumera hashes); attestamos cada binário.
+          subjects=$(find . -type f \
+              \( -name "*.so" -o -name "*.dll" -o -name "*.aar" \
+                 -o -name "*.nupkg" -o -path "*MCPixSDKFFI.xcframework*" \) \
+              -print0 | xargs -0 sha256sum)
+          if [ -z "${subjects}" ]; then
+            echo "::error::no buildable artifacts found for SLSA provenance"
+            exit 1
+          fi
+          echo "${subjects}"
+          b64=$(echo -n "${subjects}" | base64 -w0)
+          echo "base64-subjects=${b64}" >> "$GITHUB_OUTPUT"
+
+  # ───────────────────────────────────────────────────────────────────
+  # provenance: SLSA L3 via reusable workflow oficial. Runner separado
+  # do build (isolation requisito L3). Keyless via Sigstore Fulcio +
+  # Rekor transparency log. Produz `.intoto.jsonl` como artefato GHA.
+  # `upload-assets: false` — não anexamos a Release; este pipeline é
+  # de build, não de release.
+  # ───────────────────────────────────────────────────────────────────
+  provenance:
+    needs: [meta, subjects]
+    if: inputs.provenance && needs.subjects.result == 'success'
+    permissions:
+      id-token: write
+      contents: write   # exigido pelo reusable workflow mesmo sem Release
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.subjects.outputs.base64-subjects }}
+      provenance-name: mcpix-${{ needs.meta.outputs.label }}.intoto.jsonl
+      upload-assets: false

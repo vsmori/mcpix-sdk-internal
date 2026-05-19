@@ -1,0 +1,96 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mcpix-core",
+    "crates/mcpix-receiver-sdk",
+    "crates/mcpix-bank-receiver",
+    "crates/mcpix-bank-payer-mock",
+    "crates/mcpix-ffi",
+    "crates/mcpix-uniffi",
+    "crates/mcpix-embed",
+    "crates/mcpix-backup",
+    "crates/mcpix-wasm",
+    "crates/uniffi-bindgen",
+    "examples",
+    "xtask",
+]
+
+# `fuzz/` é deliberadamente excluído: libfuzzer-sys depende de toolchain
+# nightly e flags de sanitização que poluem o resto da matriz de build.
+# Operadores rodam via `cargo +nightly fuzz run <target>` quando precisarem.
+#
+# `embedded/` é excluído porque vive em target cross-compile bare-metal
+# (thumbv7em-none-eabihf) com cortex-m-rt + linker script próprio. Não
+# resolve no host. Build via `cd embedded && cargo build`.
+exclude = ["fuzz", "embedded"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Proprietary"
+publish = false
+
+[workspace.dependencies]
+mcpix-core = { path = "crates/mcpix-core" }
+mcpix-receiver-sdk = { path = "crates/mcpix-receiver-sdk" }
+mcpix-bank-receiver = { path = "crates/mcpix-bank-receiver" }
+mcpix-bank-payer-mock = { path = "crates/mcpix-bank-payer-mock" }
+
+# Cripto: defaults desligados a nível de workspace para que `mcpix-embed`
+# (no_std) consiga compilar para targets bare-metal. Crates host (mcpix-core
+# etc.) opt-in em `std` via features locais.
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+subtle = { version = "2.5", default-features = false }
+zeroize = { version = "1.7", default-features = false, features = ["derive"] }
+thiserror = "1"
+rand_core = { version = "0.6", features = ["std", "getrandom"] }
+parking_lot = "0.12"
+rusqlite = { version = "0.31", features = ["bundled"] }
+data-encoding = "2.5"
+cbindgen = { version = "0.27", default-features = false }
+uniffi = { version = "0.28", features = ["cli"] }
+uniffi_build = { version = "0.28" }
+ed25519-dalek = { version = "2.1", default-features = false, features = ["std"] }
+proptest = "1.5"
+
+# HTTP layer (S7) — server e cliente que tornam o bank-receiver acessível
+# remotamente. Mantidos atrás de feature flags para que o núcleo continue
+# zero-dep network-side.
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json", "matched-path"] }
+tokio = { version = "1", default-features = false, features = ["macros", "rt-multi-thread", "net", "signal"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls", "webpki-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+
+# mTLS layer (S8) — autenticação por certificado de cliente, substituindo o
+# header X-Institution-Id da S7. Default off; ativado via feature `mtls`.
+axum-server = { version = "0.8", default-features = false, features = ["tls-rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls-pemfile = "2"
+x509-parser = "0.18"
+rcgen = "0.14"
+
+# Embedded (S9) — no_std, sem alloc. Receiver-only subset para microcontroladores.
+heapless = "0.9"
+qrcodegen-no-heap = "1"
+
+# Persistência embarcada (S11) — abstração padrão de flash de microcontrolador.
+embedded-storage = "0.3"
+crc = { version = "3", default-features = false }
+
+# Backup/restore de sementes (S12) — KDF resistente a brute-force + AEAD moderno.
+argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+bs58 = { version = "0.5", default-features = false, features = ["alloc", "check"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 0

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mcpix-sdk — demo do protocolo offline</title>
+    <style>
+        :root {
+            --bg: #0f1419;
+            --panel: #1c2128;
+            --panel-2: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --good: #3fb950;
+            --bad: #f85149;
+            --warn: #d29922;
+            --secret: #a371f7;
+            --public: #79c0ff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+            line-height: 1.45;
+        }
+        h1 { font-size: 22px; margin: 0 0 4px 0; }
+        h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;
+             color: var(--muted); margin: 0 0 12px 0; font-weight: 600; }
+        .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1400px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        .panel {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 20px;
+        }
+        .panel-r { border-left: 3px solid var(--accent); }
+        .panel-p { border-left: 3px solid var(--warn); }
+        .row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+        label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+        input[type=text], input[type=number] {
+            background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+            border-radius: 4px; padding: 6px 10px; font-family: monospace; font-size: 13px;
+            width: 100%;
+        }
+        button {
+            background: var(--accent); color: #0d1117; border: none;
+            padding: 7px 14px; border-radius: 4px; font-weight: 600; cursor: pointer;
+            font-size: 13px;
+        }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.secondary {
+            background: transparent; color: var(--text);
+            border: 1px solid var(--border);
+        }
+        button.danger { background: var(--bad); color: #fff; }
+        .field {
+            background: var(--panel-2); border: 1px solid var(--border);
+            border-radius: 4px; padding: 8px 10px; font-family: monospace;
+            font-size: 12px; word-break: break-all; margin-top: 4px; min-height: 20px;
+        }
+        .field.empty { color: var(--muted); font-style: italic; }
+        .field.public { border-left: 3px solid var(--public); }
+        .field.secret { border-left: 3px solid var(--secret); }
+        .field.match { border-left: 3px solid var(--good); }
+        .tag {
+            display: inline-block; font-size: 10px; padding: 2px 6px;
+            border-radius: 3px; margin-left: 6px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .tag.public { background: rgba(121, 192, 255, 0.15); color: var(--public); }
+        .tag.secret { background: rgba(163, 113, 247, 0.15); color: var(--secret); }
+        .log {
+            background: #000; color: #c0c0c0; padding: 12px;
+            border-radius: 4px; font-family: monospace; font-size: 12px;
+            min-height: 80px; max-height: 180px; overflow-y: auto;
+            margin-top: 12px; white-space: pre-wrap;
+        }
+        .log .ok { color: var(--good); }
+        .log .err { color: var(--bad); }
+        .log .warn { color: var(--warn); }
+        .outcome {
+            padding: 10px; border-radius: 4px; font-weight: 600;
+            margin-top: 10px; font-size: 14px;
+        }
+        .outcome.Valid { background: rgba(63, 185, 80, 0.15); color: var(--good); }
+        .outcome.Mismatch { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
+        .outcome.Replay { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
+        .help {
+            font-size: 12px; color: var(--muted); margin-top: 4px;
+        }
+        details {
+            margin-top: 16px; padding: 8px 0; border-top: 1px solid var(--border);
+        }
+        details summary {
+            cursor: pointer; color: var(--muted); font-size: 12px;
+            text-transform: uppercase; letter-spacing: 0.08em;
+        }
+        details > div { margin-top: 12px; font-size: 13px; color: var(--muted); }
+        details code { background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+        hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+        .arrow {
+            text-align: center; font-size: 28px; color: var(--muted);
+            grid-column: 1 / -1; margin: -10px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>mcpix-sdk — demo do protocolo offline</h1>
+<p class="subtitle">
+    Esta página executa a SDK inteira em WebAssembly e simula os dois "bancos"
+    em memória. Os botões abaixo movem o estado entre <strong>recebedor</strong>
+    (gera cobrança, custodia <code>Seed</code>) e <strong>pagador</strong>
+    (parseia campo público, consulta <code>Seed</code> no recebedor, reconstrói
+    <code>C₂</code>). Tudo offline — não há rede.
+</p>
+
+<!-- ─────────────────────── Modo (Sequential | Quantized) ─────────────────────── -->
+<div class="panel" style="margin-bottom: 20px; max-width: 1400px;">
+    <h2>Modo do contador</h2>
+    <div class="row" style="margin: 0;">
+        <label style="margin: 0; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="mode" value="sequential" checked>
+            <strong>Sequencial</strong> — T monotônico, atribuído pelo recebedor
+        </label>
+    </div>
+    <div class="row" style="margin: 4px 0;">
+        <label style="margin: 0; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="mode" value="quantized">
+            <strong>Quantizado por tempo</strong> — T = ⌊now/window⌋
+        </label>
+        <div style="margin-left: 16px;">
+            <label style="display: inline-block; margin: 0;">Window (segundos)</label>
+            <input type="number" id="windowSeconds" value="30" min="5" max="300" style="width: 80px;">
+        </div>
+    </div>
+    <div id="quantizedStatus" style="display: none; margin-top: 10px;">
+        <span style="color: var(--muted); font-size: 12px;">Quantum atual:</span>
+        <code id="qCurrentT" style="margin: 0 8px; color: var(--public);">—</code>
+        <span style="color: var(--muted); font-size: 12px;">próxima janela em</span>
+        <code id="qCountdown" style="margin: 0 8px; color: var(--warn);">—</code>
+    </div>
+    <p class="help">
+        Trocar de modo reseta a demo. <strong>Quantizado</strong>: re-gerar cobrança no mesmo quantum
+        falha com <code>CounterCollision</code> — defesa contra C₂ duplicado.
+    </p>
+</div>
+
+<div class="grid">
+
+    <!-- ─────────────────────── Recebedor ─────────────────────── -->
+    <div class="panel panel-r">
+        <h2>Banco do recebedor</h2>
+
+        <div class="row">
+            <div style="flex:1">
+                <label>SeedId</label>
+                <input type="text" id="seedId" value="R1" maxlength="16">
+            </div>
+            <button id="btnRegister">Cadastrar semente</button>
+        </div>
+        <p class="help">Gera <code>Seed</code> aleatória (32 bytes via <code>crypto.getRandomValues</code>) e associa ao <code>SeedId</code>. Em produção: HSM/Secure Enclave.</p>
+
+        <hr>
+
+        <div class="row">
+            <div style="flex:1">
+                <label>Valor (centavos)</label>
+                <input type="number" id="amount" value="9900" min="1">
+            </div>
+            <button id="btnGenerate" disabled>Gerar cobrança</button>
+        </div>
+
+        <label>Campo de transporte público <span class="tag public">público</span></label>
+        <div class="field public empty" id="fieldTransport">— gera cobrança primeiro —</div>
+
+        <label>Counter T</label>
+        <div class="field" id="fieldCounter">—</div>
+
+        <label>C₂ retido localmente <span class="tag secret">secreto</span></label>
+        <div class="field secret empty" id="fieldRetainedC2">— retido no recebedor; não trafega —</div>
+
+        <hr>
+
+        <label>C₂ apresentado pelo pagador</label>
+        <input type="text" id="presentedC2" placeholder="cole o C₂ recuperado pelo pagador" maxlength="11">
+
+        <div class="row">
+            <button id="btnValidate" disabled>Validar comprovante</button>
+            <button class="secondary" id="btnValidateAgain" disabled>Validar de novo (replay)</button>
+        </div>
+
+        <div id="validationOutcome"></div>
+    </div>
+
+    <!-- ─────────────────────── Pagador ─────────────────────── -->
+    <div class="panel panel-p">
+        <h2>Banco do pagador</h2>
+
+        <label>Campo de transporte recebido <span class="tag public">público</span></label>
+        <input type="text" id="payerTransport" placeholder="cole/escaneie o campo do recebedor" maxlength="35">
+
+        <label>Counter T do contexto</label>
+        <input type="number" id="payerCounter" placeholder="counter da cobrança" min="0">
+
+        <p class="help">Em produção <code>T</code> vem do timestamp quantizado da transação. Aqui injetamos explicitamente.</p>
+
+        <button id="btnRecover">Consultar semente e recuperar C₂</button>
+
+        <hr>
+
+        <label>SeedId extraído</label>
+        <div class="field empty" id="fieldExtractedSeedId">—</div>
+
+        <label>C₁ extraído <span class="tag public">público</span></label>
+        <div class="field public empty" id="fieldExtractedC1">—</div>
+
+        <label>C₂ reconstruído <span class="tag secret">secreto até aqui</span></label>
+        <div class="field secret empty" id="fieldRecoveredC2">— consulta a semente do recebedor (em produção via mTLS) e deriva via <code>HMAC-SHA256(Seed, T||C₁)</code> —</div>
+
+        <button class="secondary" id="btnCopyC2" disabled style="margin-top: 8px;">Copiar C₂ para o painel do recebedor</button>
+    </div>
+
+    <!-- ─────────────────────── Log ─────────────────────── -->
+    <div class="panel" style="grid-column: 1 / -1;">
+        <h2>Log de operações</h2>
+        <div class="log" id="log"></div>
+    </div>
+</div>
+
+<details>
+    <summary>Por que esta demo demonstra o protocolo</summary>
+    <div>
+        <p><strong>Substituição institucional:</strong> o C₂ gerado pelo recebedor offline (<code>retained_c2</code>) é
+        bit-exato igual ao C₂ reconstruído pelo pagador (<code>recovered_c2</code>) a partir do mesmo
+        <code>(Seed, T, C₁)</code>. O recebedor nunca transmitiu C₂ — só o pagador o derivou com a Seed que veio do
+        banco recebedor.</p>
+
+        <p><strong>Anti-replay:</strong> tentar validar o mesmo C₂ duas vezes devolve <code>Replay</code> — o store
+        local marcou o registro como consumido depois da primeira validação.</p>
+
+        <p><strong>Anti-tampering:</strong> qualquer bit alterado no campo de transporte produz C₁ diferente,
+        que com a mesma Seed/T deriva outro C₂ — <code>Mismatch</code> na validação.</p>
+
+        <p><strong>Tamanho:</strong> o wasm bundle inteiro tem ~80 KB. A SDK Rust roda no browser sem polyfills.</p>
+    </div>
+</details>
+
+<script type="module">
+    import init, { WasmDemo } from './pkg/mcpix_wasm.js';
+
+    let demo = null;
+    let lastCharge = null;
+    let currentMode = 'sequential';
+    let tickInterval = null;
+
+    const $ = (id) => document.getElementById(id);
+    const log = (msg, cls = '') => {
+        const el = $('log');
+        const line = document.createElement('div');
+        line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        el.appendChild(line);
+        el.scrollTop = el.scrollHeight;
+    };
+
+    // Recria a instância wasm quando o usuário troca de modo.
+    // Em quantizado, dispara um setInterval para chamar tick() e
+    // atualizar o display do quantum corrente.
+    function rebuildDemo() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const win = BigInt($('windowSeconds').value || '30');
+        const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+
+        // Cleanup
+        if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+        if (demo) { demo.free(); demo = null; }
+
+        if (mode === 'quantized') {
+            demo = WasmDemo.new_quantized(win, nowSecs);
+            $('quantizedStatus').style.display = 'block';
+            tickInterval = setInterval(updateQuantizedDisplay, 250);
+            updateQuantizedDisplay();
+        } else {
+            demo = new WasmDemo();
+            $('quantizedStatus').style.display = 'none';
+        }
+
+        currentMode = mode;
+        lastCharge = null;
+        $('btnGenerate').disabled = true;
+        $('btnValidate').disabled = true;
+        $('btnValidateAgain').disabled = true;
+        $('btnCopyC2').disabled = true;
+        ['fieldTransport', 'fieldCounter', 'fieldRetainedC2',
+         'fieldExtractedSeedId', 'fieldExtractedC1', 'fieldRecoveredC2'].forEach(id => {
+            const el = $(id); el.textContent = '—'; el.classList.add('empty');
+        });
+        $('validationOutcome').textContent = '';
+        $('validationOutcome').className = '';
+        log(`modo: ${mode}${mode === 'quantized' ? ` (window=${win}s)` : ''} — estado resetado`, 'warn');
+    }
+
+    function updateQuantizedDisplay() {
+        if (!demo || currentMode !== 'quantized') return;
+        const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+        demo.tick(nowSecs);
+        const q = demo.current_quantum();
+        const win = demo.window_seconds();
+        $('qCurrentT').textContent = q !== undefined ? q.toString() : '—';
+        if (win !== undefined) {
+            const nowMs = Date.now();
+            const winMs = Number(win) * 1000;
+            const elapsed = nowMs % winMs;
+            const remainSec = Math.ceil((winMs - elapsed) / 1000);
+            $('qCountdown').textContent = `${remainSec}s`;
+        }
+    }
+
+    async function bootstrap() {
+        try {
+            await init();
+            // Listeners do modo (precisam de wasm carregado para
+            // chamar new_quantized).
+            document.querySelectorAll('input[name="mode"]').forEach(r => {
+                r.addEventListener('change', rebuildDemo);
+            });
+            $('windowSeconds').addEventListener('change', () => {
+                if (currentMode === 'quantized') rebuildDemo();
+            });
+            rebuildDemo();  // estado inicial: sequencial
+            log('módulo wasm carregado — ' + (navigator.platform || 'unknown'), 'ok');
+        } catch (e) {
+            log('falha ao carregar wasm: ' + e, 'err');
+        }
+    }
+
+    function setField(id, value, cls = '') {
+        const el = $(id);
+        el.textContent = value;
+        el.classList.remove('empty');
+        if (cls) el.classList.add(cls);
+    }
+
+    $('btnRegister').onclick = () => {
+        const sid = $('seedId').value.trim();
+        try {
+            const proof = demo.register(sid);
+            log(`cadastrado: SeedId="${proof.seed_id}" (Seed de 32 bytes gerada via crypto.getRandomValues)`, 'ok');
+            $('btnGenerate').disabled = false;
+        } catch (e) {
+            log('erro no cadastro: ' + e, 'err');
+        }
+    };
+
+    $('btnGenerate').onclick = () => {
+        const sid = $('seedId').value.trim();
+        const amount = BigInt($('amount').value || '0');
+        // Em quantizado: garante que o clock está atualizado antes
+        // de generate_charge (que internamente lê via Counter::next).
+        if (currentMode === 'quantized') {
+            demo.tick(BigInt(Math.floor(Date.now() / 1000)));
+        }
+        try {
+            const charge = demo.generate_charge(sid, amount);
+            lastCharge = charge;
+            setField('fieldTransport', charge.transport_field, 'public');
+            setField('fieldCounter', charge.counter);
+            setField('fieldRetainedC2', charge.retained_c2, 'secret');
+            log(`cobrança gerada: counter=${charge.counter}, transport=${charge.transport_field}`, 'ok');
+
+            // Auto-popula o painel pagador para fluxo fluido.
+            $('payerTransport').value = charge.transport_field;
+            $('payerCounter').value = charge.counter;
+        } catch (e) {
+            // Em quantizado: CounterCollision quando re-gera no mesmo
+            // window. Mostra com cor "warn" porque é comportamento
+            // esperado, não bug.
+            const msg = e.toString();
+            const cls = msg.includes('counter collision') ? 'warn' : 'err';
+            log(`gerar cobrança: ${msg}`, cls);
+        }
+    };
+
+    $('btnRecover').onclick = () => {
+        const tf = $('payerTransport').value.trim();
+        const counter = BigInt($('payerCounter').value || '0');
+        try {
+            const out = demo.payer_recover_c2(tf, counter);
+            setField('fieldExtractedSeedId', out.seed_id);
+            setField('fieldExtractedC1', out.c1, 'public');
+            setField('fieldRecoveredC2', out.recovered_c2, 'secret');
+            $('btnCopyC2').disabled = false;
+            log(`pagador recuperou C₂: ${out.recovered_c2} (a partir de Seed[${out.seed_id}], T=${out.counter}, C₁=${out.c1})`, 'ok');
+            if (lastCharge && lastCharge.retained_c2 === out.recovered_c2) {
+                log('  ✓ bit-exato igual ao retained_c2 do recebedor — substituição institucional comprovada', 'ok');
+                $('fieldRecoveredC2').classList.add('match');
+            }
+        } catch (e) {
+            log('erro na recuperação: ' + e, 'err');
+        }
+    };
+
+    $('btnCopyC2').onclick = () => {
+        $('presentedC2').value = $('fieldRecoveredC2').textContent;
+        $('btnValidate').disabled = false;
+        log('C₂ copiado para o painel do recebedor — agora valide o comprovante', 'warn');
+    };
+
+    function doValidate(replayLabel) {
+        const sid = $('seedId').value.trim();
+        const counter = BigInt(lastCharge.counter);
+        const c2 = $('presentedC2').value.trim();
+        try {
+            const outcome = demo.validate_receipt(sid, counter, c2);
+            const el = $('validationOutcome');
+            el.className = 'outcome ' + outcome;
+            el.textContent = outcome.toUpperCase();
+            const cssCls = outcome === 'Valid' ? 'ok' : outcome === 'Replay' ? 'warn' : 'err';
+            log(`validação ${replayLabel}: ${outcome}`, cssCls);
+            if (outcome === 'Valid') {
+                $('btnValidateAgain').disabled = false;
+            }
+        } catch (e) {
+            log('erro na validação: ' + e, 'err');
+        }
+    }
+
+    $('btnValidate').onclick = () => doValidate('inicial');
+    $('btnValidateAgain').onclick = () => doValidate('segunda tentativa');
+
+    bootstrap();
+</script>
+
+</body>
+</html>

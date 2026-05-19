@@ -1,0 +1,65 @@
+# Fuzzing rotineiro (não-bloqueante).
+#
+# Estratégia: rodar curto a cada PR para detectar regressões grosseiras,
+# e rodar prolongado em schedule semanal. Crashes encontrados sobem como
+# artefatos (corpus + repro) — não falham o build em si para que a esteira
+# principal não dependa do fuzzer.
+
+name: fuzz
+
+on:
+  pull_request:
+    paths:
+      - 'crates/mcpix-core/src/**'
+      - 'crates/mcpix-core/src/signature.rs'
+      - 'crates/mcpix-core/src/transport_field.rs'
+      - 'fuzz/**'
+  schedule:
+    # Domingos 03:00 UTC — janela longa para fuzzing prolongado.
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: 'Per-target fuzz duration in seconds'
+        required: false
+        default: '60'
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fuzz_transport_parse, fuzz_sums_line, fuzz_verify_combined]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'fuzz -> target'
+
+      - name: determine duration
+        id: duration
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "seconds=1800" >> $GITHUB_OUTPUT       # 30 min
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "seconds=${{ inputs.duration_seconds }}" >> $GITHUB_OUTPUT
+          else
+            echo "seconds=60" >> $GITHUB_OUTPUT          # 1 min em PR
+          fi
+
+      - name: fuzz ${{ matrix.target }}
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            -- -max_total_time=${{ steps.duration.outputs.seconds }} \
+               -timeout=10
+
+      - name: upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/

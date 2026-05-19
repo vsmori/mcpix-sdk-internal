@@ -1,0 +1,49 @@
+[package]
+name = "mcpix-embed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Receiver-only subset para microcontroladores. `no_std` por padrão; sem
+# allocator. Compila para `riscv32imc-unknown-none-elf` (ESP32-C3),
+# `thumbv7em-none-eabihf` (Cortex-M4), e demais bare-metal targets.
+#
+# Para portar para ESP8266 (Xtensa LX106) é necessário o fork da Espressif
+# da toolchain Rust (`espup install`); o código deste crate é portável,
+# o ponto crítico é a toolchain, não o SDK.
+
+[features]
+default = []
+# `std` é ativada pelos testes do host e pela validação cruzada contra
+# `mcpix-core`. Em firmware, sempre `--no-default-features`.
+std = []
+# QR encoding via qrcodegen-no-heap (também no_std, mas é dep adicional).
+qr = ["dep:qrcodegen-no-heap"]
+# Persistência em flash via `embedded-storage`. Default off — caller traz
+# o backend (esp-storage, stm32-flash, etc.) e ativa esta feature.
+storage = ["dep:embedded-storage", "dep:crc"]
+# Restore do backup criptografado (Argon2id + ChaCha20-Poly1305). Implementação
+# paralela à `mcpix-backup` (host) — mesmo wire format, parsing sobre heapless.
+# Requer alloc para argon2/chacha20poly1305/bs58 — caller fornece um global
+# allocator (linked_list_allocator no Cortex-M, esp-alloc no ESP32).
+restore = ["dep:argon2", "dep:chacha20poly1305", "dep:bs58"]
+
+[dependencies]
+hmac = { workspace = true, default-features = false }
+sha2 = { workspace = true, default-features = false }
+subtle = { workspace = true, default-features = false }
+zeroize = { workspace = true, default-features = false, features = ["derive"] }
+heapless = { workspace = true }
+qrcodegen-no-heap = { workspace = true, optional = true }
+embedded-storage = { workspace = true, optional = true }
+crc = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
+bs58 = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Para o teste de validação cruzada contra `mcpix-core` (host-only).
+mcpix-core = { workspace = true }
+mcpix-backup = { path = "../mcpix-backup" }

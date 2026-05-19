@@ -1,0 +1,42 @@
+/target
+*.swp
+.DS_Store
+.idea/
+.vscode/
+
+# Gradle
+bindings/kotlin/.gradle/
+bindings/kotlin/build/
+bindings/kotlin/.kotlin/
+bindings/kotlin/local.properties
+
+# Swift Package Manager local builds
+bindings/swift/.build/
+bindings/swift/MCPixSDKFFI.xcframework/
+
+# Release artifacts — produzidos por `cargo xtask build-*`
+dist/
+
+# .NET
+bindings/dotnet/bin/
+bindings/dotnet/obj/
+
+# Android AAR build outputs
+bindings/kotlin/aar/.gradle/
+bindings/kotlin/aar/build/
+
+# Web demo: artefatos gerados pelo wasm-bindgen (reproduzíveis via
+# `cargo xtask build-wasm`). Não comitamos para evitar dupla source of
+# truth — quem clona reconstrói.
+examples/web-demo/pkg/
+
+# Vendored deps gerada por `cargo xtask verify-hermetic`. Não
+# comitamos (50+ MB, 184 crates) — o teste hermético reconstrói on
+# demand. O Cargo.lock é a source of truth de versões.
+/vendor/
+.cargo/config.hermetic.toml
+
+# NEVER commit private keys
+*release-key.priv
+*.priv
+*.pem

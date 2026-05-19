@@ -1,0 +1,251 @@
+# Release: build cross-platform, empacotamento, SHA256SUMS, publicação.
+# Dispara em push de tag `v*` ou via workflow_dispatch.
+#
+# Matriz:
+#   - ubuntu-latest: Linux .so, Windows .dll (cross via mingw), Android (4 ABIs via cargo-ndk)
+#   - macos-latest: iOS XCFramework (device + simulator universal)
+#
+# Os jobs depositam artefatos em dist/, baixados pelo job `publish` que
+# computa SHA256SUMS, produz GitHub Release e (opcionalmente) publica em
+# Maven e NuGet quando os secrets correspondentes estiverem disponíveis.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (default: tag without leading v)'
+        required: false
+
+permissions:
+  contents: write
+  id-token: write   # SLSA L3 — OIDC para keyless signing via Sigstore.
+  actions: read     # SLSA L3 — leitura de metadados de workflow.
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-windows:
+    name: linux + windows (cross via mingw)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
+
+      - name: install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build linux
+        run: cargo xtask build-linux
+
+      - name: build windows
+        run: cargo xtask build-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-windows
+          path: dist/
+
+  android:
+    name: android (4 ABIs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/
+
+  ios:
+    name: ios (XCFramework)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build ios + xcframework
+        run: |
+          cargo xtask build-ios
+          cargo xtask package-xcframework
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-ios
+          path: dist/
+
+  package:
+    name: package + sign + release
+    needs: [linux-windows, android, ios]
+    runs-on: ubuntu-latest
+    # Exporta o digest dos artefatos para o job `provenance` (SLSA L3).
+    # Saída em base64 (formato esperado pelo slsa-github-generator).
+    outputs:
+      artifacts-base64-subjects: ${{ steps.subjects.outputs.subjects }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist-staged }
+
+      - name: merge artifacts
+        run: |
+          mkdir -p dist
+          cp -r dist-staged/dist-linux-windows/* dist/ 2>/dev/null || true
+          cp -r dist-staged/dist-android/* dist/ 2>/dev/null || true
+          cp -r dist-staged/dist-ios/* dist/ 2>/dev/null || true
+          ls -la dist/
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: hash artifacts
+        run: cargo xtask hash-artifacts
+
+      - name: sign SHA256SUMS
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: cargo xtask sign-artifacts
+
+      # ── AAR ─────────────────────────────────────────────────────────────
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+        with: { cmdline-tools-version: 11076708 }
+      - uses: gradle/actions/setup-gradle@v3
+      - name: package aar
+        run: cargo xtask package-aar
+
+      # ── NuGet ───────────────────────────────────────────────────────────
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: package nuget
+        run: cargo xtask package-nuget
+
+      - name: hash final artifacts
+        run: cargo xtask hash-artifacts
+
+      - name: re-sign final SHA256SUMS
+        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: cargo xtask sign-artifacts
+
+      # ── SLSA L3: extrai (path, sha256) de cada artefato e codifica em      ─
+      # base64. Esse formato é o "subjects" da spec in-toto; o reusable        ─
+      # workflow `generator_generic_slsa3.yml` o consome literalmente e        ─
+      # assina via Sigstore (Fulcio cert + Rekor inclusion proof) usando o     ─
+      # OIDC token efêmero do runner — não há chave privada longa.             ─
+      - name: prepare SLSA subjects
+        id: subjects
+        run: |
+          # Lista de artefatos a serem attestados. Mantemos SHA256SUMS de
+          # fora porque ele já enumera os hashes em si; provar provenance
+          # de cada binário individualmente é o que o consumidor verifica.
+          (
+            cd dist
+            find . -type f \
+              \( -name "*.so" -o -name "*.dll" -o -name "*.aar" \
+                 -o -name "*.nupkg" -o -path "*MCPixSDKFFI.xcframework*" \) \
+              -print0 | xargs -0 sha256sum
+          ) > /tmp/subjects.txt
+          # base64 sem quebras de linha (formato esperado pelo generator).
+          echo "subjects=$(base64 -w0 < /tmp/subjects.txt)" >> "$GITHUB_OUTPUT"
+
+      # ── GitHub Release ──────────────────────────────────────────────────
+      - name: github release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+            dist/**/*.so
+            dist/**/*.dll
+            dist/**/*.aar
+            dist/**/*.nupkg
+            dist/ios/MCPixSDKFFI.xcframework/**
+
+      # ── Publicação em registries (skip se secrets ausentes) ─────────────
+      - name: publish to Maven registry
+        if: env.MAVEN_URL != ''
+        env:
+          MAVEN_URL: ${{ secrets.MAVEN_URL }}
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+        working-directory: bindings/kotlin/aar
+        run: gradle publish -Pmaven.url="$MAVEN_URL" -Pmaven.user="$MAVEN_USER" -Pmaven.pass="$MAVEN_PASS"
+
+      - name: publish to NuGet feed
+        if: env.NUGET_URL != ''
+        env:
+          NUGET_URL: ${{ secrets.NUGET_URL }}
+          NUGET_KEY: ${{ secrets.NUGET_KEY }}
+        run: |
+          dotnet nuget push 'dist/nuget/*.nupkg' \
+            --source "$NUGET_URL" --api-key "$NUGET_KEY" --skip-duplicate
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # SLSA L3 provenance
+  # ──────────────────────────────────────────────────────────────────────────
+  # Reusable workflow oficial do projeto SLSA. Roda em runner *separado* do
+  # build, isolando o passo de assinatura (requisito L3 de "build isolation
+  # between provenance generation and the build itself").
+  #
+  # Gera arquivo `<artifact>.intoto.jsonl` contendo:
+  #   • predicate `slsa-provenance` v1 (https://slsa.dev/provenance/v1)
+  #     com: builder.id (deste workflow), buildType (generic), invocation
+  #     (ref/commit/parameters), materials (source repo + commit SHA),
+  #     metadata (timestamps reproduzíveis pelo runner)
+  #   • assinatura keyless via Sigstore Fulcio (cert efêmero ligado ao
+  #     OIDC token do GitHub Actions — claim subject contém workflow path,
+  #     ref, repository, actor)
+  #   • inclusion proof em Rekor (transparency log público)
+  #
+  # Por que isso fecha §5.3 (Comprometimento do CI):
+  #   • Atacante que controle um runner não consegue forjar OIDC token do
+  #     GitHub IdP — teria que comprometer o próprio GitHub.
+  #   • Alterações no workflow path ou no branch viram diff visível no
+  #     Rekor — `slsa-verifier` rejeita se o repositório/ref não bater.
+  #   • Provenance vincula bit-exato o artefato baixado ao commit que o
+  #     produziu (consumer verifica antes de carregar o .so).
+  provenance:
+    needs: [package]
+    permissions:
+      id-token: write   # OIDC para Sigstore (sem secrets persistentes).
+      contents: write   # Anexa o .intoto.jsonl ao GitHub Release.
+      actions: read     # Leitura de metadata do workflow para o predicate.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.package.outputs.artifacts-base64-subjects }}
+      provenance-name: mcpix-sdk.intoto.jsonl
+      upload-assets: ${{ startsWith(github.ref, 'refs/tags/') }}

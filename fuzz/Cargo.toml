@@ -1,0 +1,38 @@
+[package]
+name = "mcpix-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# Esta crate é separada do workspace porque depende de `nightly` para
+# `-Z sanitizer=address` e gera múltiplos binários `[[bin]]` que o libfuzzer
+# liga ao runtime nativo.
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
+arbitrary = { version = "1", features = ["derive"] }
+mcpix-core = { path = "../crates/mcpix-core" }
+
+[[bin]]
+name = "fuzz_transport_parse"
+path = "fuzz_targets/fuzz_transport_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sums_line"
+path = "fuzz_targets/fuzz_sums_line.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_verify_combined"
+path = "fuzz_targets/fuzz_verify_combined.rs"
+test = false
+doc = false
+bench = false

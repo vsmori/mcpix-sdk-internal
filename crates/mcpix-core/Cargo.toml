@@ -1,0 +1,30 @@
+[package]
+name = "mcpix-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# `std` features explícitas: workspace dep agora vem com defaults-off para
+# permitir cross-compile do `mcpix-embed`. Aqui no host queremos std.
+hmac = { workspace = true, features = ["std"] }
+sha2 = { workspace = true, features = ["std"] }
+subtle = { workspace = true, features = ["std"] }
+zeroize = { workspace = true, features = ["alloc"] }
+thiserror.workspace = true
+data-encoding.workspace = true
+ed25519-dalek.workspace = true
+
+[dev-dependencies]
+rand_core.workspace = true
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+proptest = { workspace = true }
+# `arbitrary` é usada pelo replay para reconstruir a entrada
+# estruturada do `fuzz_verify_combined` a partir dos bytes opacos do
+# corpus — mesma API que o libfuzzer usa, sem nightly.
+arbitrary = { version = "1", features = ["derive"] }
