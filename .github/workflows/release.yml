@@ -29,8 +29,28 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Gate pré-build: prova que o release atual ainda compila de forma
+  # hermética (sem rede após `cargo vendor`). Roda primeiro porque é
+  # condição necessária para qualquer artefato confiável — se quebrou,
+  # o resto não vale ser publicado. Phase 1 do SLSA L4 (cross-runner
+  # comparison vive em reproducibility.yml; ver docs/SLSA_L4_PROGRESS.md).
+  hermetic-gate:
+    name: hermetic build gate (SLSA L4 phase 1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - name: cargo xtask verify-hermetic
+        run: cargo xtask verify-hermetic
+        # ~10 min de wall time (vendor + build offline). Inflar o
+        # release.yml em 10min é aceitável porque tags v* são
+        # esporádicas — vale o sinal "este build é reconstruível".
+
   linux-windows:
     name: linux + windows (cross via mingw)
+    needs: hermetic-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +76,7 @@ jobs:
 
   android:
     name: android (4 ABIs)
+    needs: hermetic-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +106,7 @@ jobs:
 
   ios:
     name: ios (XCFramework)
+    needs: hermetic-gate
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

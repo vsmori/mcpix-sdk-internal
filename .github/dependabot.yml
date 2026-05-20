@@ -1,0 +1,66 @@
+# Dependabot — atualizações automáticas de deps por ecossistema.
+#
+# Por que esta config existe (e não Renovate): Dependabot é nativo do
+# GitHub, zero setup operacional. Tradeoff: menos opções de
+# auto-merge fino. Para um SDK com revisão humana obrigatória em PRs
+# de dep, Dependabot é o suficiente.
+#
+# Critérios:
+#   - Cargo: schedule semanal (toda quarta). Cripto deps (ed25519-dalek,
+#     chacha20poly1305, sha2, hmac, argon2) têm cadência de update
+#     própria — se sair CVE crítico, GitHub também avisa via Security
+#     Advisory paralelo.
+#   - GitHub Actions: schedule semanal. Action minor bumps são quase
+#     sempre seguros; major bumps exigem leitura do changelog.
+#   - Limite de PRs abertos: 5 por ecossistema. Evita inundar com 30 PRs
+#     na primeira semana após enable.
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "04:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    # Agrupa updates patch/minor em um PR só por package family —
+    # reduz noise de 10 PRs distintos para 1 quando todos saem no
+    # mesmo ciclo.
+    groups:
+      crypto:
+        patterns:
+          - "ed25519-dalek"
+          - "chacha20poly1305"
+          - "sha2"
+          - "hmac"
+          - "argon2"
+          - "subtle"
+          - "zeroize*"
+          - "ring"
+          - "rustls*"
+          - "x509-*"
+      uniffi:
+        patterns:
+          - "uniffi*"
+      embedded:
+        patterns:
+          - "cortex-m*"
+          - "embedded-storage"
+          - "heapless"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "04:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
