@@ -128,7 +128,7 @@ num NDEF message que o terminal do pagador lê ao encostar.
 | Componente | Coberto pelo mcpix | Responsabilidade do integrador |
 |---|---|---|
 | Gerar `transport_field` offline | ✅ `generateCharge` | — |
-| Restaurar Seed do backup selado | ✅ `mcpix-backup::import` (ou XCFramework expõe) | passphrase / key management |
+| Restaurar Seed do backup selado | ✅ `McpixReceiver.fromSealedBackup(backup:passphrase:)` (binding UniFFI) | passphrase / key management |
 | Renderizar QR | — (CoreImage nativo) | `BarcodeView.swift` |
 | Enviar por NFC | — (CoreNFC nativo) | `NFCBeam.swift` + entitlements |
 | Validar comprovante (lado pagador) | ✅ no banco do pagador (`mcpix-bank-receiver`) | infra do PSP |

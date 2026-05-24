@@ -722,6 +722,8 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -745,6 +747,8 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_mcpix_uniffi_fn_free_mcpixreceiver(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_mcpix_uniffi_fn_constructor_mcpixreceiver_from_sealed_backup(`backup`: RustBuffer.ByValue,`passphrase`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
     fun uniffi_mcpix_uniffi_fn_constructor_mcpixreceiver_new(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_mcpix_uniffi_fn_method_mcpixreceiver_generate_charge(`ptr`: Pointer,`seedId`: RustBuffer.ByValue,`amountCents`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -871,6 +875,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_mcpix_uniffi_checksum_method_mcpixreceiver_validate_receipt(
     ): Short
+    fun uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_from_sealed_backup(
+    ): Short
     fun uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_new(
     ): Short
     fun ffi_mcpix_uniffi_uniffi_contract_version(
@@ -897,6 +903,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_mcpix_uniffi_checksum_method_mcpixreceiver_validate_receipt() != 36873.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_from_sealed_backup() != 25573.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_new() != 64384.toShort()) {
@@ -1364,8 +1373,41 @@ open class McpixReceiver: Disposable, AutoCloseable, McpixReceiverInterface {
     
 
     
+    companion object {
+        
+    /**
+     * Restaura um recebedor a partir de um backup criptografado
+     * (formato `mcpix-backup`, Base58Check) + passphrase.
+     *
+     * Caso de uso central do sample Apple Wallet + App Clip: o App
+     * Clip resgata o blob selado no init e restaura a Seed
+     * localmente, ficando pronto para gerar cobranças **offline**.
+     *
+     * Apenas modo **sequencial** é suportado por este construtor —
+     * ele semeia o `InMemoryCounter` com o `T` restaurado para que a
+     * próxima cobrança use `T + 1` (preserva monotonia pós-troca de
+     * dispositivo). Backups em modo quantizado retornam erro: o
+     * counter quantizado deriva do relógio, não do estado salvo, e
+     * precisaria de um `TimestampQuantizedCounter` injetado — fora
+     * do escopo deste construtor simples.
+     *
+     * **Segurança**: a passphrase desbloqueia o Argon2id + AEAD do
+     * backup. Em produção venha de biometria/Keychain, não de input
+     * manual. Passphrase errada → erro de Storage (não distingue de
+     * blob corrompido — defesa de info-leak).
+     */
+    @Throws(McpixUniffiException::class) fun `fromSealedBackup`(`backup`: kotlin.String, `passphrase`: kotlin.String): McpixReceiver {
+            return FfiConverterTypeMcpixReceiver.lift(
+    uniffiRustCallWithError(McpixUniffiException) { _status ->
+    UniffiLib.INSTANCE.uniffi_mcpix_uniffi_fn_constructor_mcpixreceiver_from_sealed_backup(
+        FfiConverterString.lower(`backup`),FfiConverterString.lower(`passphrase`),_status)
+}
+    )
+    }
     
-    companion object
+
+        
+    }
     
 }
 

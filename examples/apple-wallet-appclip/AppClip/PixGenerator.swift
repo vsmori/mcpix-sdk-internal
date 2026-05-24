@@ -49,12 +49,10 @@ final class PixGenerator: ObservableObject {
             let info = try await fetchInit(memberId: memberId)
 
             // (2) restaura a Seed do backup selado e instancia o
-            //     McpixReceiver. O binding Swift do mcpix exporia um
-            //     `McpixReceiver.fromBackup(blob:passphrase:)`; aqui
-            //     ilustramos a forma esperada. (A superfície UniFFI
-            //     atual expõe register/generate/validate; expor o
-            //     restore exige um pequeno scaffolding adicional —
-            //     ver nota no README.)
+            //     McpixReceiver. `fromSealedBackup` é exposto pelo
+            //     binding UniFFI (mcpix-uniffi) — decifra o blob
+            //     Argon2id+AEAD, registra a Seed e semeia o counter
+            //     com o T restaurado (próxima cobrança usa T+1).
             let r = try McpixReceiver.fromSealedBackup(
                 backup: info.sealedSeedBackup,
                 passphrase: passphrase
