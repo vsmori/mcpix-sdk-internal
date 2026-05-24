@@ -23,6 +23,14 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
+# Tee toda saída de cada step para um único arquivo, publicado como
+# artefato baixável no step `upload sample logs on failure`. Mesma
+# técnica do ci.yml — ver comentário lá. Vale também no runner macOS
+# (ios-sample): bash + process substitution existem no macOS.
+defaults:
+  run:
+    shell: bash -eo pipefail -c 'exec > >(mkdir -p /tmp/ci-logs && tee -a /tmp/ci-logs/full.log) 2>&1; source "{0}"'
+
 jobs:
   android-sample:
     name: Android sample (Activity + AAR)
@@ -73,6 +81,18 @@ jobs:
           path: examples/android-sample/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
+      - name: strip ANSI from sample log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload sample logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14
+
   instant-app-sample:
     name: Google Play Instant sample (Android)
     runs-on: ubuntu-latest
@@ -119,6 +139,18 @@ jobs:
           path: examples/google-wallet-instant-app/instantapp/build/outputs/apk/debug/*.apk
           retention-days: 30
 
+      - name: strip ANSI from sample log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload sample logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14
+
   ios-sample:
     name: iOS sample (SwiftUI + XCFramework)
     runs-on: macos-latest
@@ -162,3 +194,15 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
+
+      - name: strip ANSI from sample log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload sample logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14

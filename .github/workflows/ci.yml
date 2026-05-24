@@ -13,6 +13,16 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+# Tee toda saída de cada step (stdout+stderr) para um único arquivo, de
+# modo que o step `upload CI logs on failure` publique um artefato
+# baixável com a saída REAL de compilador/teste. O GHA só mostra o log
+# de step na própria UI web — que não dá para compartilhar como arquivo.
+# O `mkdir` dentro da process substitution faz o primeiro step se
+# auto-inicializar (não precisa de step de bootstrap antes).
+defaults:
+  run:
+    shell: bash -eo pipefail -c 'exec > >(mkdir -p /tmp/ci-logs && tee -a /tmp/ci-logs/full.log) 2>&1; source "{0}"'
+
 jobs:
   test:
     name: Rust tests + bindings
@@ -124,6 +134,22 @@ jobs:
       - name: check bindings drift
         run: cargo xtask check-bindings
 
+      # Remove códigos ANSI de cor (CARGO_TERM_COLOR=always) para o log
+      # ficar legível ao colar em texto. `shell: bash` ignora o wrapper
+      # de tee acima — assim o sed -i não corre com o tee reescrevendo
+      # o mesmo arquivo.
+      - name: strip ANSI from CI log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload CI logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14
+
   kotlin-smoke:
     name: Kotlin JVM smoke test
     runs-on: ubuntu-latest
@@ -153,6 +179,18 @@ jobs:
         working-directory: examples/kotlin-jvm-sample
         run: gradle assemble --no-daemon
 
+      - name: strip ANSI from CI log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload CI logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14
+
   dotnet-sample:
     name: .NET sample build
     runs-on: ubuntu-latest
@@ -175,3 +213,15 @@ jobs:
       - name: dotnet build (examples/dotnet-sample)
         working-directory: examples/dotnet-sample
         run: dotnet build -c Release --nologo
+
+      - name: strip ANSI from CI log
+        if: failure()
+        shell: bash
+        run: perl -i -pe 's/\x1b\[[0-9;]*m//g' /tmp/ci-logs/full.log 2>/dev/null || true
+      - name: upload CI logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.job }}
+          path: /tmp/ci-logs/full.log
+          retention-days: 14
