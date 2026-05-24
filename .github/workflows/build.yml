@@ -197,7 +197,7 @@ jobs:
         with: { cmdline-tools-version: 11076708 }
       - uses: gradle/actions/setup-gradle@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: mcpix-${{ needs.meta.outputs.label }}-android
           path: dist/
@@ -225,7 +225,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '8.0.x' }
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: mcpix-${{ needs.meta.outputs.label }}-linux-windows
           path: dist/
@@ -259,7 +259,7 @@ jobs:
     outputs:
       base64-subjects: ${{ steps.s.outputs.base64-subjects }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           # Baixa qualquer artefato cujo nome começa com o prefixo deste run.
           pattern: mcpix-${{ needs.meta.outputs.label }}-*

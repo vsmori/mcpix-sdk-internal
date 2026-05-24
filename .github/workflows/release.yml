@@ -136,7 +136,7 @@ jobs:
       artifacts-base64-subjects: ${{ steps.subjects.outputs.subjects }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { path: dist-staged }
 
       - name: merge artifacts
