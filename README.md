@@ -130,6 +130,7 @@ generate → validate). Tabela completa + comandos build/run em
 | Android (Activity + AAR) | [`examples/android-sample/`](examples/android-sample/) |
 | iOS (SwiftUI + XCFramework) | [`examples/ios-sample/`](examples/ios-sample/) |
 | Apple Wallet + App Clip (geração offline + QR + NFC) | [`examples/apple-wallet-appclip/`](examples/apple-wallet-appclip/) |
+| Google Wallet + Play Instant (geração offline + QR + NFC) | [`examples/google-wallet-instant-app/`](examples/google-wallet-instant-app/) |
 | Bare-metal Cortex-M4F (`no_std`) | [`embedded/`](embedded/) (apontado por [`examples/embedded-demo/`](examples/embedded-demo/)) |
 
 ## Self-check de integridade (S3 + S4)

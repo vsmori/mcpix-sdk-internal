@@ -81,7 +81,30 @@ apple-wallet-appclip/
     └── NFCBeam.swift            ← CoreNFC: envia transport_field por NDEF
 ```
 
-## Setup Xcode (resumo)
+## Gerar o projeto Xcode (XcodeGen)
+
+O `.xcodeproj` não é versionado (é binário-ish e dá merge-hell);
+em vez disso, comitamos um `project.yml` declarativo que o
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) materializa:
+
+```bash
+brew install xcodegen
+
+# 1. Constrói o XCFramework do mcpix e copia para esta pasta
+(cd ../.. && cargo xtask build-ios && cargo xtask package-xcframework)
+cp -R ../../bindings/swift/MCPixSDKFFI.xcframework .
+
+# 2. Gera + abre o projeto
+xcodegen generate
+open McpixWalletAppClip.xcodeproj
+```
+
+O `project.yml` define dois targets:
+- `McpixWalletHost` — app principal (host obrigatório do App Clip).
+- `McpixWalletClip` — o App Clip (`.Clip` suffix), com Associated
+  Domains + entitlement NFC já configurados.
+
+## Setup Xcode (detalhes)
 
 App Clips **não** compilam via `swift build` puro — precisam de um
 projeto Xcode com:

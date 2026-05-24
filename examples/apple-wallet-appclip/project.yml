@@ -1,0 +1,87 @@
+# XcodeGen project spec — gera o .xcodeproj do App Clip a partir
+# deste YAML (versionável, diff-friendly), evitando comitar o
+# project.pbxproj binário-ish que dá merge-hell.
+#
+# Uso:
+#   brew install xcodegen
+#   cd examples/apple-wallet-appclip
+#   # 1. construir o XCFramework do mcpix:
+#   (cd ../.. && cargo xtask build-ios && cargo xtask package-xcframework)
+#   cp -R ../../bindings/swift/MCPixSDKFFI.xcframework .
+#   # 2. gerar o projeto:
+#   xcodegen generate
+#   open McpixWalletAppClip.xcodeproj
+#
+# Estrutura de targets:
+#   - McpixWalletHost      app principal (host obrigatório do App Clip)
+#   - McpixWalletClip      o App Clip propriamente dito (.Clip suffix)
+#
+# A Apple exige que todo App Clip tenha um app principal host, mesmo
+# que o host seja um stub. Aqui o host é mínimo; o código real vive
+# no Clip.
+
+name: McpixWalletAppClip
+
+options:
+  bundleIdPrefix: br.com.suaempresa.identificacao
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+# O XCFramework do mcpix entra como dependência binária local de
+# ambos os targets. Gere-o antes (ver header) e copie para esta pasta.
+packages: {}
+
+targets:
+  # ── App principal (host obrigatório do App Clip) ──────────────────
+  McpixWalletHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: Host
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.suaempresa.identificacao
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        # Sem code signing no dev local / CI sem provisioning:
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+    dependencies:
+      - framework: MCPixSDKFFI.xcframework
+        embed: true
+
+  # ── App Clip ──────────────────────────────────────────────────────
+  McpixWalletClip:
+    type: app-clip            # XcodeGen mapeia para
+                              # com.apple.product-type.application.on-demand-install-capable
+    platform: iOS
+    sources:
+      - path: AppClip
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.suaempresa.identificacao.Clip
+        # Associated Domains para o Universal Link abrir o App Clip:
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+    entitlements:
+      path: AppClip/McpixWalletClip.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - appclips:appclip.suaempresa.com.br
+        # CoreNFC (para NFCBeam.swift). App Clips suportam um subset —
+        # confirme disponibilidade no iOS target. Reading formats:
+        com.apple.developer.nfc.readersession.formats:
+          - NDEF
+    dependencies:
+      - framework: MCPixSDKFFI.xcframework
+        embed: true
+    # O App Clip é embutido no app host:
+    info:
+      path: AppClip/Info.plist
+      properties:
+        NSAppClip:
+          NSAppClipRequestEphemeralUserNotification: false
+          NSAppClipRequestLocationConfirmation: false
+        # Default URL para preview do App Clip no App Store Connect:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false

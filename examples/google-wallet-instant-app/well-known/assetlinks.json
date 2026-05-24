@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "handle_all_urls",
+      "delegate_permission/common.handle_as_apk"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.com.suaempresa.identificacao",
+      "sha256_cert_fingerprints": [
+        "A1:B2:C3:D4:E5:F6:A1:B2:C3:D4:E5:F6:A1:B2:C3:D4:E5:F6:A1:B2:C3:D4:E5:F6:A1:B2:C3:D4:E5:F6:77:88"
+      ]
+    }
+  }
+]
