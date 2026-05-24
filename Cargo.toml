@@ -47,7 +47,7 @@ zeroize = { version = "1.7", default-features = false, features = ["derive"] }
 thiserror = "1"
 rand_core = { version = "0.6", features = ["std", "getrandom"] }
 parking_lot = "0.12"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 data-encoding = "2.5"
 cbindgen = { version = "0.27", default-features = false }
 uniffi = { version = "0.28", features = ["cli"] }
