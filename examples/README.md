@@ -15,6 +15,7 @@ quando você porta para outro stack.
 | [`kotlin-jvm-sample/`](kotlin-jvm-sample/) | Kotlin JVM CLI (JNA) | `ci.yml` (kotlin-smoke job, step `gradle assemble`) |
 | [`android-sample/`](android-sample/) | Android Activity + AAR | `samples-mobile.yml` (manual + mensal) |
 | [`ios-sample/`](ios-sample/) | iOS SwiftUI + XCFramework | `samples-mobile.yml` (manual + mensal, macOS runner) |
+| [`apple-wallet-appclip/`](apple-wallet-appclip/) | Apple Wallet Generic Pass + App Clip (geração offline + QR + NFC) | ⚠️ exige projeto Xcode com App Clip target — não automatizável em CI |
 | [`embedded-demo/`](embedded-demo/) | Cortex-M4F bare-metal (`no_std`) | `ci.yml` (cross-compile thumbv7em) |
 
 Por que os samples mobile estão num workflow separado: Android exige

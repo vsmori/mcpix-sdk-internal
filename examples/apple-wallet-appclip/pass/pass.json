@@ -1,0 +1,60 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.br.com.suaempresa.identificacao",
+  "serialNumber": "ID8839201",
+  "teamIdentifier": "APPLE_TEAM_ID_10_DIGITOS",
+  "organizationName": "Nome da Sua Empresa",
+  "description": "Chave de Identificação Digital",
+  "logoText": "ID CORPORATIVO",
+  "backgroundColor": "rgb(26, 32, 44)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "labelColor": "rgb(148, 163, 184)",
+  "generic": {
+    "primaryFields": [
+      {
+        "key": "userName",
+        "label": "TITULAR",
+        "value": "Carlos Eduardo Lima"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "memberId",
+        "label": "CHAVE DE IDENTIFICAÇÃO",
+        "value": "SEC-99281-X"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "issueDate",
+        "label": "EMISSÃO",
+        "value": "2026-05-15T10:00:00Z",
+        "dateStyle": "PKDateStyleShort"
+      },
+      {
+        "key": "status",
+        "label": "STATUS",
+        "value": "ATIVO"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "appClipLink",
+        "label": "RECEBER PAGAMENTO VIA PIX",
+        "value": "Toque no link abaixo para abrir o terminal de recebimento offline (mcpix):\nhttps://appclip.suaempresa.com.br/checkout?id=SEC-99281-X"
+      },
+      {
+        "key": "instructions",
+        "label": "SOBRE ESTE CARTÃO",
+        "value": "Este cartão é de uso estritamente pessoal e intransferível. O recebimento Pix integrado usa substituição institucional offline (mcpix): o código é gerado localmente no dispositivo, sem chamada por-transação ao PSP."
+      }
+    ]
+  },
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatPDF417",
+      "message": "SEC-99281-X|Carlos Eduardo Lima",
+      "messageEncoding": "iso-8859-1"
+    }
+  ]
+}
