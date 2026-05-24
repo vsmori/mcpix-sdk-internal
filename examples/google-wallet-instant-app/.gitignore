@@ -1,0 +1,7 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+**/build/
+local.properties
+*.apk
+*.aab

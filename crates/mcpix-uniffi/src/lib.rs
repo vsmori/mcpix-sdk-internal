@@ -19,6 +19,7 @@
 use std::sync::Arc;
 
 use mcpix_core::state::ValidationOutcome;
+use mcpix_core::traits::SeedStore;
 use mcpix_core::types::SeedId;
 use mcpix_receiver_sdk::{
     memory_store::InMemorySeedStore, monotonic_counter::InMemoryCounter, system_random::OsRandom,
@@ -124,6 +125,50 @@ impl McpixReceiver {
         })
     }
 
+    /// Restaura um recebedor a partir de um backup criptografado
+    /// (formato `mcpix-backup`, Base58Check) + passphrase.
+    ///
+    /// Caso de uso central do sample Apple Wallet + App Clip: o App
+    /// Clip resgata o blob selado no init e restaura a Seed
+    /// localmente, ficando pronto para gerar cobranças **offline**.
+    ///
+    /// Apenas modo **sequencial** é suportado por este construtor —
+    /// ele semeia o `InMemoryCounter` com o `T` restaurado para que a
+    /// próxima cobrança use `T + 1` (preserva monotonia pós-troca de
+    /// dispositivo). Backups em modo quantizado retornam erro: o
+    /// counter quantizado deriva do relógio, não do estado salvo, e
+    /// precisaria de um `TimestampQuantizedCounter` injetado — fora
+    /// do escopo deste construtor simples.
+    ///
+    /// **Segurança**: a passphrase desbloqueia o Argon2id + AEAD do
+    /// backup. Em produção venha de biometria/Keychain, não de input
+    /// manual. Passphrase errada → erro de Storage (não distingue de
+    /// blob corrompido — defesa de info-leak).
+    #[uniffi::constructor]
+    pub fn from_sealed_backup(
+        backup: String,
+        passphrase: String,
+    ) -> Result<Arc<Self>, McpixUniffiError> {
+        let restored = mcpix_backup::import(&backup, passphrase.as_bytes())
+            .map_err(|e| McpixUniffiError::Storage(format!("backup restore: {e}")))?;
+
+        if restored.counter_mode != mcpix_backup::CounterMode::Sequential {
+            return Err(McpixUniffiError::Storage(
+                "quantized-mode backup restore not supported by this constructor".into(),
+            ));
+        }
+
+        let store = Arc::new(InMemorySeedStore::new());
+        store.put_seed(&restored.seed_id, restored.seed)?;
+
+        let counter = Arc::new(InMemoryCounter::new());
+        counter.restore_last_issued(&restored.seed_id, restored.counter_t);
+
+        Ok(Arc::new(Self {
+            inner: ReceiverSdk::new(store, counter, Arc::new(OsRandom)),
+        }))
+    }
+
     /// Cadastra um recebedor com o `seed_id` informado.
     pub fn register(&self, seed_id: String) -> Result<(), McpixUniffiError> {
         let sid = SeedId::new(seed_id)?;
@@ -181,5 +226,65 @@ mod tests {
         let recv = McpixReceiver::new();
         let err = recv.register("R0".into()).unwrap_err();
         assert!(matches!(err, McpixUniffiError::InvalidSeedId(_)));
+    }
+
+    #[test]
+    fn restore_from_sealed_backup_round_trips() {
+        use mcpix_backup::{export_with_params_pub, CounterMode, ExportInput, KdfParams};
+        use mcpix_core::types::Seed;
+
+        // Produz um backup sequencial com T=5 (params rápidos p/ teste).
+        let seed = Seed::from_bytes([0xAB; 32]);
+        let sid = SeedId::new("RECVR1").unwrap();
+        let input = ExportInput {
+            seed: &seed,
+            seed_id: &sid,
+            counter_mode: CounterMode::Sequential,
+            counter_t: 5,
+        };
+        let quick = KdfParams {
+            m_cost_kib: 8,
+            t_cost: 1,
+            p_cost: 1,
+        };
+        let blob = export_with_params_pub(&input, b"pwd", quick).unwrap();
+
+        // Restaura via o construtor UniFFI.
+        let recv = McpixReceiver::from_sealed_backup(blob, "pwd".into()).unwrap();
+
+        // A próxima cobrança deve usar T = 6 (last_issued 5 + 1) —
+        // monotonia preservada pós-restore.
+        let charge = recv.generate_charge("RECVR1".into(), 100).unwrap();
+        assert_eq!(charge.counter, 6, "counter must continue after restored T");
+        assert!(charge.transport_field.starts_with("PIXOFFv1"));
+    }
+
+    #[test]
+    fn restore_wrong_passphrase_is_typed_error() {
+        use mcpix_backup::{export_with_params_pub, CounterMode, ExportInput, KdfParams};
+        use mcpix_core::types::Seed;
+
+        let seed = Seed::from_bytes([0x11; 32]);
+        let sid = SeedId::new("R1").unwrap();
+        let input = ExportInput {
+            seed: &seed,
+            seed_id: &sid,
+            counter_mode: CounterMode::Sequential,
+            counter_t: 1,
+        };
+        let quick = KdfParams {
+            m_cost_kib: 8,
+            t_cost: 1,
+            p_cost: 1,
+        };
+        let blob = export_with_params_pub(&input, b"right", quick).unwrap();
+
+        // `unwrap_err()` exigiria `Arc<McpixReceiver>: Debug`; o objeto
+        // UniFFI não deriva Debug, então casamos manualmente.
+        match McpixReceiver::from_sealed_backup(blob, "wrong".into()) {
+            Err(McpixUniffiError::Storage(_)) => {}
+            Err(other) => panic!("expected Storage error, got {other:?}"),
+            Ok(_) => panic!("wrong passphrase must not restore"),
+        }
     }
 }

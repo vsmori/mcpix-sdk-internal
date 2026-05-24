@@ -545,6 +545,36 @@ public convenience init() {
     }
 
     
+    /**
+     * Restaura um recebedor a partir de um backup criptografado
+     * (formato `mcpix-backup`, Base58Check) + passphrase.
+     *
+     * Caso de uso central do sample Apple Wallet + App Clip: o App
+     * Clip resgata o blob selado no init e restaura a Seed
+     * localmente, ficando pronto para gerar cobranças **offline**.
+     *
+     * Apenas modo **sequencial** é suportado por este construtor —
+     * ele semeia o `InMemoryCounter` com o `T` restaurado para que a
+     * próxima cobrança use `T + 1` (preserva monotonia pós-troca de
+     * dispositivo). Backups em modo quantizado retornam erro: o
+     * counter quantizado deriva do relógio, não do estado salvo, e
+     * precisaria de um `TimestampQuantizedCounter` injetado — fora
+     * do escopo deste construtor simples.
+     *
+     * **Segurança**: a passphrase desbloqueia o Argon2id + AEAD do
+     * backup. Em produção venha de biometria/Keychain, não de input
+     * manual. Passphrase errada → erro de Storage (não distingue de
+     * blob corrompido — defesa de info-leak).
+     */
+public static func fromSealedBackup(backup: String, passphrase: String)throws  -> McpixReceiver {
+    return try  FfiConverterTypeMcpixReceiver.lift(try rustCallWithError(FfiConverterTypeMcpixUniffiError.lift) {
+    uniffi_mcpix_uniffi_fn_constructor_mcpixreceiver_from_sealed_backup(
+        FfiConverterString.lower(backup),
+        FfiConverterString.lower(passphrase),$0
+    )
+})
+}
+    
 
     
     /**
@@ -906,6 +936,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mcpix_uniffi_checksum_method_mcpixreceiver_validate_receipt() != 36873) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_from_sealed_backup() != 25573) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mcpix_uniffi_checksum_constructor_mcpixreceiver_new() != 64384) {

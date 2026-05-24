@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:dist="http://schemas.android.com/apk/distribution">
+
+    <!-- Marca o módulo como entregável instantâneo (Google Play
+         Instant). O OS pode rodar a Activity sem instalação prévia. -->
+    <dist:module dist:instant="true" />
+
+    <!-- NFC: concedida sem prompt em runtime. HCE exige um
+         HostApduService (ver NfcBeam.kt) — em Instant App há limites,
+         confirme no target. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".PixCheckoutActivity"
+            android:exported="true">
+            <!-- App Link verificado: autoVerify casa com o
+                 assetlinks.json publicado no domínio. Só o app
+                 legítimo (SHA-256 fingerprint registrado) intercepta. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="instantapp.suaempresa.com.br" />
+                <data android:pathPrefix="/checkout" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

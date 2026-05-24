@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Pre-commit hook: roda `cargo fmt --check` + `cargo clippy` antes de
+# permitir o commit. Replica os gates de ci.yml localmente — evita o
+# round-trip "push → CI rejeita por whitespace → commit de fix".
+#
+# Para ativar (uma vez por clone):
+#   git config core.hooksPath .githooks
+#
+# Para skipar este hook num commit pontual:
+#   git commit --no-verify
+# (use com parcimônia — quase nunca é a resposta certa.)
+
+set -euo pipefail
+
+# ────────────────────────────────────────────────────────────────────
+# 1) cargo fmt — todos os crates do workspace + samples
+# ────────────────────────────────────────────────────────────────────
+echo "[pre-commit] cargo fmt --all --check..."
+if ! cargo fmt --all -- --check; then
+    echo ""
+    echo "✗ fmt drift detectado. Rode:"
+    echo "    cargo fmt --all"
+    echo "  e commite de novo."
+    exit 1
+fi
+
+# ────────────────────────────────────────────────────────────────────
+# 2) cargo clippy — same args do ci.yml step
+# ────────────────────────────────────────────────────────────────────
+echo "[pre-commit] cargo clippy --workspace --all-targets..."
+if ! cargo clippy --workspace --all-targets --no-deps -- -D warnings 2>&1 \
+    | tail -50
+then
+    echo ""
+    echo "✗ clippy reclamou. Corrija os warnings (ou justifique com #[allow(...)]"
+    echo "  no escopo mínimo) e commite de novo."
+    exit 1
+fi
+
+echo "[pre-commit] OK"

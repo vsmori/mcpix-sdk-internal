@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist do target App Clip. XcodeGen mescla as `info.properties`
+     do project.yml por cima deste arquivo base; mantemos aqui só o
+     esqueleto mínimo. O NSAppClip marca o target como App Clip para o
+     sistema. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>MCPix Recebimento</string>
+    <key>CFBundleDisplayName</key>
+    <string>Recebimento Pix</string>
+    <key>NSAppClip</key>
+    <dict>
+        <key>NSAppClipRequestEphemeralUserNotification</key>
+        <false/>
+        <key>NSAppClipRequestLocationConfirmation</key>
+        <false/>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,8 @@
+# Gerado por `xcodegen generate` — reconstruível a partir de project.yml.
+*.xcodeproj/
+# XCFramework copiado de bindings/swift/ — produzido por
+# `cargo xtask package-xcframework`.
+MCPixSDKFFI.xcframework/
+# Build outputs
+build/
+DerivedData/

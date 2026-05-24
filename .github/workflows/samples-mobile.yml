@@ -1,0 +1,164 @@
+# Build dos samples mobile (Android + iOS). Separado do `ci.yml` por
+# custo: Android exige SDK + NDK (~5 min de setup), iOS exige runner
+# macOS (cobrança 10× minutos GHA). Dispara:
+#   - manualmente via UI (workflow_dispatch)
+#   - mensalmente para detectar bit-rot em deps Android Studio /
+#     Xcode antes que vire problema crítico
+#
+# Não bloqueia PRs. Se quebrar, é sinal de upgrade necessário em
+# AGP/Kotlin/Xcode/Swift; abre issue.
+
+name: samples (mobile)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 1º dia do mês 04:00 UTC. Time-of-month escolhido para minimizar
+    # contenção com release.yml (que dispara em tags `v*` sob demanda).
+    - cron: '0 4 1 * *'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  android-sample:
+    name: Android sample (Activity + AAR)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+      - uses: gradle/actions/setup-gradle@v3
+
+      # Cadeia: cargo-ndk produz jniLibs/<abi>/libmcpix_uniffi.so;
+      # bindings/kotlin/aar empacota num .aar; examples/android-sample
+      # consome via composite-build (settings.gradle.kts).
+      - name: build android jniLibs (4 ABIs)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - name: assemble examples/android-sample (debug APK)
+        working-directory: examples/android-sample
+        # `assembleDebug` é mais barato que `assembleRelease` (sem
+        # ProGuard/R8) e suficiente para provar que UI + binding linkam.
+        run: gradle :app:assembleDebug --no-daemon
+
+      # Upload do APK debug como artefato — útil para inspeção manual
+      # ("este sample do commit X funcionou no emulador?") sem
+      # precisar rodar o workflow de novo.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-sample-debug-apk
+          path: examples/android-sample/app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+  instant-app-sample:
+    name: Google Play Instant sample (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+      - uses: gradle/actions/setup-gradle@v3
+
+      # Mesma cadeia do android-sample: cargo-ndk → jniLibs → .aar
+      # consumido pelo módulo instant via composite build.
+      - name: build android jniLibs (4 ABIs)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - name: assemble examples/google-wallet-instant-app (debug APK)
+        working-directory: examples/google-wallet-instant-app
+        # O build.gradle do módulo restringe abiFilters a arm64-v8a
+        # (orçamento de 15 MB do Instant App). assembleDebug prova que
+        # Activity + Compose + ZXing + binding mcpix linkam.
+        run: gradle :instantapp:assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instant-app-sample-debug-apk
+          path: examples/google-wallet-instant-app/instantapp/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+  ios-sample:
+    name: iOS sample (SwiftUI + XCFramework)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      # Constrói o XCFramework que o Package.swift do binding aponta.
+      # build-ios produz os .a; package-xcframework bundleia.
+      - name: build ios + xcframework
+        run: |
+          cargo xtask build-ios
+          cargo xtask package-xcframework
+
+      # Move o XCFramework para o local que o Package.swift de
+      # bindings/swift espera. release.yml faz o mesmo caminho.
+      - name: stage xcframework
+        run: |
+          set -euo pipefail
+          test -d dist/ios/MCPixSDKFFI.xcframework || \
+            (echo "::error::XCFramework não encontrado em dist/ios/"; exit 1)
+          cp -R dist/ios/MCPixSDKFFI.xcframework bindings/swift/
+
+      # `swift build` valida que o sample compila contra o
+      # XCFramework. Triple iOS porque o Package.swift especifica
+      # `.iOS(.v15)` como plataforma do `executableTarget`. Em macOS
+      # também compila (`.macOS(.v12)`), mas iOS-sim é o caso de uso
+      # canônico.
+      - name: swift build (examples/ios-sample)
+        working-directory: examples/ios-sample
+        # iOS triples não-suportados por `swift build` direto — usamos
+        # `xcodebuild` que enxerga o Package.swift e cross-compila.
+        # `-destination "generic/platform=iOS Simulator"` valida o
+        # bundle para emulador sem precisar de devices reais.
+        run: |
+          xcodebuild build \
+            -scheme McpixSample \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO

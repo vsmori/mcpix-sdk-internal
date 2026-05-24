@@ -1,0 +1,21 @@
+<!-- Demo integrador .NET — consome MCPix.Sdk via P/Invoke sobre o
+     cdylib nativo. Para usar o NuGet publicado:
+       <PackageReference Include="MCPix.Sdk" Version="0.1.0" />
+     Aqui referenciamos o csproj local para que o sample build a partir
+     do source do mesmo repo. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>McpixSample</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Em produção use PackageReference. Aqui usa o csproj do source
+       tree para que o `dotnet build` rode sem precisar de feed NuGet
+       configurado. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\bindings\dotnet\MCPixSDK.csproj" />
+  </ItemGroup>
+</Project>

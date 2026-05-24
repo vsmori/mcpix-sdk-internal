@@ -1608,6 +1608,7 @@ dependencies = [
 name = "mcpix-uniffi"
 version = "0.1.0"
 dependencies = [
+ "mcpix-backup",
  "mcpix-bank-payer-mock",
  "mcpix-bank-receiver",
  "mcpix-core",

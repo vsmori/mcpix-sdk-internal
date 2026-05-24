@@ -1,0 +1,51 @@
+{
+  "issuingDetails": {
+    "issuerId": "3388000000012345678"
+  },
+  "id": "3388000000012345678.SEC_99281_X",
+  "classId": "3388000000012345678.ID_CORPORATIVO_CLASS",
+  "state": "ACTIVE",
+  "cardTitle": {
+    "defaultValue": {
+      "language": "pt-BR",
+      "value": "ID CORPORATIVO"
+    }
+  },
+  "header": {
+    "defaultValue": {
+      "language": "pt-BR",
+      "value": "ATIVO"
+    }
+  },
+  "heroImage": {
+    "sourceUri": {
+      "uri": "https://suaempresa.com.br/assets/banner_generic.png"
+    }
+  },
+  "textModulesData": [
+    {
+      "header": "TITULAR",
+      "body": "Carlos Eduardo Lima",
+      "id": "userName"
+    },
+    {
+      "header": "CHAVE DE IDENTIFICAÇÃO",
+      "body": "SEC-99281-X",
+      "id": "memberId"
+    }
+  ],
+  "linksModuleData": {
+    "uris": [
+      {
+        "uri": "https://instantapp.suaempresa.com.br/checkout?id=SEC-99281-X",
+        "description": "Receber Pagamento via Pix (offline mcpix)",
+        "id": "pixLink"
+      }
+    ]
+  },
+  "barcode": {
+    "type": "PDF_417",
+    "value": "SEC-99281-X|Carlos Eduardo Lima",
+    "alternateText": "SEC-99281-X"
+  }
+}

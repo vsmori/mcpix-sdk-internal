@@ -16,5 +16,6 @@ mcpix-core.workspace = true
 mcpix-receiver-sdk.workspace = true
 mcpix-bank-receiver.workspace = true
 mcpix-bank-payer-mock.workspace = true
+mcpix-backup = { path = "../mcpix-backup" }
 uniffi = { workspace = true }
 thiserror.workspace = true
