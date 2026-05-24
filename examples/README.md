@@ -16,7 +16,7 @@ quando você porta para outro stack.
 | [`android-sample/`](android-sample/) | Android Activity + AAR | `samples-mobile.yml` (manual + mensal) |
 | [`ios-sample/`](ios-sample/) | iOS SwiftUI + XCFramework | `samples-mobile.yml` (manual + mensal, macOS runner) |
 | [`apple-wallet-appclip/`](apple-wallet-appclip/) | Apple Wallet Generic Pass + App Clip (geração offline + QR + NFC) | ⚠️ exige projeto Xcode (XcodeGen `project.yml` incluído) — não automatizável em CI |
-| [`google-wallet-instant-app/`](google-wallet-instant-app/) | Google Wallet GenericObject + Play Instant (geração offline + QR + NFC) | ⚠️ exige Android SDK + App Bundle com módulo instant |
+| [`google-wallet-instant-app/`](google-wallet-instant-app/) | Google Wallet GenericObject + Play Instant (geração offline + QR + NFC) | `samples-mobile.yml` (job `instant-app-sample`, manual + mensal) |
 | [`embedded-demo/`](embedded-demo/) | Cortex-M4F bare-metal (`no_std`) | `ci.yml` (cross-compile thumbv7em) |
 
 Por que os samples mobile estão num workflow separado: Android exige

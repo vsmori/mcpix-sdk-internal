@@ -73,6 +73,52 @@ jobs:
           path: examples/android-sample/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
+  instant-app-sample:
+    name: Google Play Instant sample (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+      - uses: gradle/actions/setup-gradle@v3
+
+      # Mesma cadeia do android-sample: cargo-ndk → jniLibs → .aar
+      # consumido pelo módulo instant via composite build.
+      - name: build android jniLibs (4 ABIs)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo xtask build-android
+
+      - name: assemble examples/google-wallet-instant-app (debug APK)
+        working-directory: examples/google-wallet-instant-app
+        # O build.gradle do módulo restringe abiFilters a arm64-v8a
+        # (orçamento de 15 MB do Instant App). assembleDebug prova que
+        # Activity + Compose + ZXing + binding mcpix linkam.
+        run: gradle :instantapp:assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instant-app-sample-debug-apk
+          path: examples/google-wallet-instant-app/instantapp/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
   ios-sample:
     name: iOS sample (SwiftUI + XCFramework)
     runs-on: macos-latest
