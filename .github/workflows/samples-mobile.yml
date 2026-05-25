@@ -29,9 +29,10 @@ env:
 # (ios-sample): bash + process substitution existem no macOS.
 defaults:
   run:
-    # Absolute path via ${{ github.workspace }} so steps with
-    # working-directory: still find the wrapper.
-    shell: bash ${{ github.workspace }}/.github/scripts/ci-shell.sh {0}
+    # Wrapper copiado para /tmp/ci-shell pelo step "setup CI log capture"
+    # de cada job. Caminho absoluto para que steps com working-directory:
+    # ainda o encontrem (expressões ${{ }} não são permitidas em defaults).
+    shell: bash /tmp/ci-shell {0}
 
 jobs:
   android-sample:
@@ -39,6 +40,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Instala o wrapper de captura de log num caminho absoluto antes
+      # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
+      # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
+      - name: setup CI log capture
+        shell: bash
+        run: install -m 755 .github/scripts/ci-shell.sh /tmp/ci-shell
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
@@ -100,6 +107,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Instala o wrapper de captura de log num caminho absoluto antes
+      # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
+      # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
+      - name: setup CI log capture
+        shell: bash
+        run: install -m 755 .github/scripts/ci-shell.sh /tmp/ci-shell
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
@@ -158,6 +171,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      # Instala o wrapper de captura de log num caminho absoluto antes
+      # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
+      # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
+      - name: setup CI log capture
+        shell: bash
+        run: install -m 755 .github/scripts/ci-shell.sh /tmp/ci-shell
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
