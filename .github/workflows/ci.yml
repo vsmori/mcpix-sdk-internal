@@ -21,7 +21,9 @@ env:
 # auto-inicializar (não precisa de step de bootstrap antes).
 defaults:
   run:
-    shell: bash .github/scripts/ci-shell.sh {0}
+    # Absolute path via ${{ github.workspace }} so steps with
+    # working-directory: still find the wrapper.
+    shell: bash ${{ github.workspace }}/.github/scripts/ci-shell.sh {0}
 
 jobs:
   test:
