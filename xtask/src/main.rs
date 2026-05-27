@@ -261,7 +261,27 @@ fn package_xcframework(root: &Path) -> Result<(), String> {
         .arg("-output")
         .arg(&sim_combined))?;
 
-    let headers = root.join("bindings/swift/Sources/MCPixSDK");
+    // `xcodebuild -headers <dir>` copia o dir inteiro para Headers/ do
+    // framework, mas o Clang só expõe um módulo se houver um
+    // `module.modulemap` (nome EXATO) ali. O uniffi-bindgen gera o
+    // modulemap como `mcpix_uniffiFFI.modulemap` e despeja o `.swift` do
+    // target no mesmo dir. Montamos então um dir limpo só com o header FFI
+    // e o modulemap renomeado — senão o módulo `mcpix_uniffiFFI` não fica
+    // visível e o Swift gerado (que faz `#if canImport(mcpix_uniffiFFI)`)
+    // não enxerga RustBuffer/ffi_* e a compilação quebra.
+    let src_dir = root.join("bindings/swift/Sources/MCPixSDK");
+    let headers = out.join("Headers");
+    if headers.exists() {
+        fs::remove_dir_all(&headers).ok();
+    }
+    mkdir(&headers)?;
+    copy_into(&src_dir.join("mcpix_uniffiFFI.h"), &headers)?;
+    fs::copy(
+        src_dir.join("mcpix_uniffiFFI.modulemap"),
+        headers.join("module.modulemap"),
+    )
+    .map_err(|e| format!("copy modulemap: {e}"))?;
+
     let xcfwk = out.join("MCPixSDKFFI.xcframework");
     if xcfwk.exists() {
         fs::remove_dir_all(&xcfwk).ok();

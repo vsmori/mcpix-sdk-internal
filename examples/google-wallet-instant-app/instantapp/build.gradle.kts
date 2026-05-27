@@ -6,6 +6,10 @@
 plugins {
     id("com.android.application") version "8.7.0"
     kotlin("android") version "2.0.21"
+    // Desde Kotlin 2.0 o compilador Compose virou um plugin Gradle separado
+    // e obrigatório quando `buildFeatures.compose = true`. A versão acompanha
+    // a do Kotlin.
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
 }
 
 android {
@@ -36,9 +40,9 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
+    // `composeOptions.kotlinCompilerExtensionVersion` não é mais usado com o
+    // plugin org.jetbrains.kotlin.plugin.compose (Kotlin 2.0+) — o plugin
+    // fixa a versão do compilador junto com a do Kotlin.
 }
 
 dependencies {
