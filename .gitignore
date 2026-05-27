@@ -40,3 +40,4 @@ examples/web-demo/pkg/
 *release-key.priv
 *.priv
 *.pem
+*.log
