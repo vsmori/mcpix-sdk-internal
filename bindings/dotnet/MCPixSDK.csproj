@@ -14,7 +14,10 @@
 
     <!-- NuGet metadata -->
     <PackageId>MCPix.Sdk</PackageId>
-    <Version>$([System.Environment]::GetEnvironmentVariable('MCPIX_VERSION') ?? '0.1.0-alpha')</Version>
+    <!-- MSBuild não suporta `??`; variáveis de ambiente já são expostas como
+         propriedades, então usamos um default com override condicional. -->
+    <Version>0.1.0-alpha</Version>
+    <Version Condition="'$(MCPIX_VERSION)' != ''">$(MCPIX_VERSION)</Version>
     <Authors>MCPix</Authors>
     <Description>Local validation of payment transactions — native SDK (P/Invoke)</Description>
     <PackageLicenseExpression>Proprietary</PackageLicenseExpression>
