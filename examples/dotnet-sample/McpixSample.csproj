@@ -8,6 +8,10 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- Program.cs usa top-level statements e `Console` sem `using System;`.
+         ImplicitUsings traz os namespaces padrão (System, …) — é o default
+         do template `dotnet new console`. -->
+    <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>McpixSample</RootNamespace>
   </PropertyGroup>
