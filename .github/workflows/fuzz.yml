@@ -24,6 +24,12 @@ on:
         required: false
         default: '60'
 
+env:
+  # Força as actions JS (checkout, upload-artifact…) a rodar no Node 24.
+  # Node 20 está deprecado nos runners GHA (forçado a partir de jun/2026,
+  # removido em set/2026).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
