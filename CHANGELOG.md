@@ -21,6 +21,14 @@ e o projeto adere a [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   `samples-mobile.yml`), via wrapper `.github/scripts/ci-shell.sh`.
 - Badges de status das seis workflows no `README.md`.
 
+### Changed
+- `release.yml` agora classifica cada run em um de três modos
+  (`dry-run` / `pre-release` / `final`) via um `mode-gate` job. Modo
+  determina se signing é obrigatório, se um GitHub Release é criado, se
+  é marcado como pre-release, e se publica em Maven/NuGet. Dry-run via
+  `workflow_dispatch` com `dry_run=true` permite ensaiar todo o pipeline
+  (build + sign + SHA256SUMS + provenance) sem publicar.
+
 ### Fixed
 - `samples-mobile.yml`: build do Android sample e do Instant App
   (repositórios do AGP no `includeBuild` do AAR, plugin Compose

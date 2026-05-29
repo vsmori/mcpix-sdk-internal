@@ -19,6 +19,11 @@ on:
       version:
         description: 'Override version (default: tag without leading v)'
         required: false
+      dry_run:
+        description: 'Skip GitHub Release creation, registry publish, and SLSA asset upload'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -33,13 +38,119 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Gate de modo: classifica este run em UM dos três modos e exporta
+  # flags para os jobs downstream. A intenção é tornar o comportamento
+  # do release.yml explícito ANTES de qualquer artefato ser produzido —
+  # sem isso, um dispatch ou tag de pré-release acidentalmente
+  # publicaria como se fosse final.
+  #
+  # Modos:
+  #   • dry-run     — workflow_dispatch com inputs.dry_run=true. Builda,
+  #                   empacota, assina, gera SHA256SUMS — mas NÃO cria
+  #                   GitHub Release, NÃO publica em Maven/NuGet, NÃO
+  #                   sobe assets pro SLSA provenance.
+  #   • pre-release — tag `v*` que casa com `-rc.N|-beta.N|-alpha.N` ou
+  #                   workflow_dispatch sem dry_run. Cria GitHub Release
+  #                   marcado como pre-release; NÃO publica nos registries
+  #                   (semver-clean: pre-release não polui canal estável).
+  #   • final       — tag `v*` sem sufixo de pré-release. Caminho completo:
+  #                   GitHub Release + publish Maven/NuGet + SLSA assets.
+  #
+  # Sign-required: signing tem que existir em pre-release E final. Em
+  # dry-run, signing é opcional (útil para testar o pipeline sem ter o
+  # secret configurado). Falhar cedo se o secret estiver ausente quando
+  # exigido evita o cenário "release silenciosamente sem .sig".
+  mode-gate:
+    name: classify run mode
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      sign_required: ${{ steps.classify.outputs.sign_required }}
+      publish_registries: ${{ steps.classify.outputs.publish_registries }}
+      create_github_release: ${{ steps.classify.outputs.create_github_release }}
+      is_prerelease: ${{ steps.classify.outputs.is_prerelease }}
+    steps:
+      - id: classify
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          mode=""
+          create_github_release=false
+          publish_registries=false
+          is_prerelease=false
+
+          if [[ "$EVENT" == "workflow_dispatch" && "$DRY_RUN" == "true" ]]; then
+            mode=dry-run
+          elif [[ "$REF" == refs/tags/v* ]]; then
+            # Considera pré-release: -rc.N, -beta.N, -alpha.N (case insensitive).
+            if [[ "$REF" =~ -(rc|alpha|beta)(\.[0-9]+)?$ ]]; then
+              mode=pre-release
+              create_github_release=true
+              is_prerelease=true
+            else
+              mode=final
+              create_github_release=true
+              publish_registries=true
+            fi
+          else
+            # workflow_dispatch sem dry_run e sem estar em tag → trata como
+            # pre-release "de teste em branch" — cria release marcada como
+            # prerelease, sem publicar nos registries.
+            mode=pre-release
+            create_github_release=true
+            is_prerelease=true
+          fi
+
+          # Signing é obrigatório quando algo será publicado/distribuído.
+          if [[ "$mode" == "dry-run" ]]; then
+            sign_required=false
+          else
+            sign_required=true
+          fi
+
+          echo "mode=$mode"                                 >> "$GITHUB_OUTPUT"
+          echo "sign_required=$sign_required"               >> "$GITHUB_OUTPUT"
+          echo "publish_registries=$publish_registries"     >> "$GITHUB_OUTPUT"
+          echo "create_github_release=$create_github_release" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease"               >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### release.yml mode: \`$mode\`"
+            echo ""
+            echo "| flag | value |"
+            echo "| --- | --- |"
+            echo "| sign_required | \`$sign_required\` |"
+            echo "| create_github_release | \`$create_github_release\` |"
+            echo "| is_prerelease | \`$is_prerelease\` |"
+            echo "| publish_registries | \`$publish_registries\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fail-fast: se signing é obrigatório mas o secret está ausente,
+      # interrompe ANTES de produzir qualquer artefato. Evita o cenário
+      # "release publicado sem .sig" que o `if: env != ''` antigo permitia.
+      - name: ensure signing secret is set when required
+        if: steps.classify.outputs.sign_required == 'true'
+        env:
+          MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
+        run: |
+          if [[ -z "${MCPIX_SIGN_PRIVKEY_HEX:-}" ]]; then
+            echo "::error::mode=${{ steps.classify.outputs.mode }} requires signing but MCPIX_SIGN_PRIVKEY_HEX is not set."
+            echo "::error::Either configure the secret, or re-dispatch with dry_run=true."
+            exit 1
+          fi
+
   # Gate pré-build: prova que o release atual ainda compila de forma
-  # hermética (sem rede após `cargo vendor`). Roda primeiro porque é
-  # condição necessária para qualquer artefato confiável — se quebrou,
-  # o resto não vale ser publicado. Phase 1 do SLSA L4 (cross-runner
-  # comparison vive em reproducibility.yml; ver docs/SLSA_L4_PROGRESS.md).
+  # hermética (sem rede após `cargo vendor`). Roda após mode-gate porque
+  # se o run não pode publicar (secret ausente), não vale gastar ~10min
+  # buildando. Phase 1 do SLSA L4 (cross-runner comparison vive em
+  # reproducibility.yml; ver docs/SLSA_L4_PROGRESS.md).
   hermetic-gate:
     name: hermetic build gate (SLSA L4 phase 1)
+    needs: mode-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,7 +243,7 @@ jobs:
 
   package:
     name: package + sign + release
-    needs: [linux-windows, android, ios]
+    needs: [mode-gate, linux-windows, android, ios]
     runs-on: ubuntu-latest
     # Exporta o digest dos artefatos para o job `provenance` (SLSA L3).
     # Saída em base64 (formato esperado pelo slsa-github-generator).
@@ -157,7 +268,10 @@ jobs:
         run: cargo xtask hash-artifacts
 
       - name: sign SHA256SUMS
-        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        # Em dry-run signing é opcional (corre se o secret estiver setado,
+        # silencia se não). Em pre-release/final o mode-gate já provou
+        # que MCPIX_SIGN_PRIVKEY_HEX existe, então signing é obrigatório.
+        if: needs.mode-gate.outputs.sign_required == 'true' || env.MCPIX_SIGN_PRIVKEY_HEX != ''
         env:
           MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
         run: cargo xtask sign-artifacts
@@ -181,7 +295,10 @@ jobs:
         run: cargo xtask hash-artifacts
 
       - name: re-sign final SHA256SUMS
-        if: env.MCPIX_SIGN_PRIVKEY_HEX != ''
+        # Em dry-run signing é opcional (corre se o secret estiver setado,
+        # silencia se não). Em pre-release/final o mode-gate já provou
+        # que MCPIX_SIGN_PRIVKEY_HEX existe, então signing é obrigatório.
+        if: needs.mode-gate.outputs.sign_required == 'true' || env.MCPIX_SIGN_PRIVKEY_HEX != ''
         env:
           MCPIX_SIGN_PRIVKEY_HEX: ${{ secrets.MCPIX_SIGN_PRIVKEY_HEX }}
         run: cargo xtask sign-artifacts
@@ -208,10 +325,13 @@ jobs:
           echo "subjects=$(base64 -w0 < /tmp/subjects.txt)" >> "$GITHUB_OUTPUT"
 
       # ── GitHub Release ──────────────────────────────────────────────────
+      # Em dry-run o release não é criado — todos os artefatos seguem
+      # disponíveis como GHA build artifacts via upload-artifact abaixo.
       - name: github release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.mode-gate.outputs.create_github_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ needs.mode-gate.outputs.is_prerelease == 'true' }}
           files: |
             dist/SHA256SUMS
             dist/SHA256SUMS.sig
@@ -221,9 +341,24 @@ jobs:
             dist/**/*.nupkg
             dist/ios/MCPixSDKFFI.xcframework/**
 
-      # ── Publicação em registries (skip se secrets ausentes) ─────────────
+      # Em dry-run e pre-release, publica o dist/ completo como artefato
+      # do GHA run — assim o operador consegue inspecionar localmente
+      # ANTES de promover ao final.
+      - name: upload dist/ as artifact (dry-run + pre-release inspection)
+        if: needs.mode-gate.outputs.mode != 'final'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ needs.mode-gate.outputs.mode }}-${{ github.sha }}
+          path: dist/
+          retention-days: 14
+
+      # ── Publicação em registries ────────────────────────────────────────
+      # Só em tag final. Pré-release NÃO publica em Maven/NuGet — o canal
+      # estável fica reservado para releases com SemVer "limpo", evitando
+      # que consumidores com `implementation('br.com.mcpix:mcpix-sdk:+')`
+      # peguem `0.1.0-rc.1` por acidente.
       - name: publish to Maven registry
-        if: env.MAVEN_URL != ''
+        if: needs.mode-gate.outputs.publish_registries == 'true' && env.MAVEN_URL != ''
         env:
           MAVEN_URL: ${{ secrets.MAVEN_URL }}
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
@@ -232,7 +367,7 @@ jobs:
         run: gradle publish -Pmaven.url="$MAVEN_URL" -Pmaven.user="$MAVEN_USER" -Pmaven.pass="$MAVEN_PASS"
 
       - name: publish to NuGet feed
-        if: env.NUGET_URL != ''
+        if: needs.mode-gate.outputs.publish_registries == 'true' && env.NUGET_URL != ''
         env:
           NUGET_URL: ${{ secrets.NUGET_URL }}
           NUGET_KEY: ${{ secrets.NUGET_KEY }}
@@ -265,7 +400,7 @@ jobs:
   #   • Provenance vincula bit-exato o artefato baixado ao commit que o
   #     produziu (consumer verifica antes de carregar o .so).
   provenance:
-    needs: [package]
+    needs: [mode-gate, package]
     permissions:
       id-token: write   # OIDC para Sigstore (sem secrets persistentes).
       contents: write   # Anexa o .intoto.jsonl ao GitHub Release.
@@ -274,4 +409,7 @@ jobs:
     with:
       base64-subjects: ${{ needs.package.outputs.artifacts-base64-subjects }}
       provenance-name: mcpix-sdk.intoto.jsonl
-      upload-assets: ${{ startsWith(github.ref, 'refs/tags/') }}
+      # Em dry-run não há GitHub Release para anexar — só geramos a
+      # attestation, sem upload. O Rekor inclusion proof continua sendo
+      # emitido (transparência pública), o que é desejável até em dry-run.
+      upload-assets: ${{ needs.mode-gate.outputs.create_github_release == 'true' }}
