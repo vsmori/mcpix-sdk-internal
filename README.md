@@ -1,5 +1,12 @@
 # mcpix-sdk-internal
 
+[![ci](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/ci.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/ci.yml)
+[![samples (mobile)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/samples-mobile.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/samples-mobile.yml)
+[![fuzz](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/fuzz.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/fuzz.yml)
+[![reproducibility](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/reproducibility.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/reproducibility.yml)
+[![release](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/release.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/release.yml)
+[![build](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/build.yml/badge.svg)](https://github.com/vsmori/mcpix-sdk-internal/actions/workflows/build.yml)
+
 SDK Rust de validação local de transações de pagamento. Pré-depósito PCT — uso interno.
 
 > **Novo aqui?** Comece pelo [`QUICKSTART.md`](QUICKSTART.md) — 5 minutos até
