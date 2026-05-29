@@ -302,9 +302,13 @@ fn package_xcframework(root: &Path) -> Result<(), String> {
 }
 
 fn package_aar(root: &Path) -> Result<(), String> {
-    // Gradle :aar:assembleRelease empacota jniLibs já organizadas em
+    // O módulo AAR é um build Gradle STANDALONE (bindings/kotlin/aar tem seu
+    // próprio settings.gradle.kts, rootProject.name = "mcpix-aar"). O build
+    // pai bindings/kotlin/ não o inclui como subprojeto — por isso rodamos
+    // gradle de dentro de aar/ com a task `assembleRelease` (sem o prefixo
+    // `:aar:`). Empacota jniLibs já organizadas em
     // `dist/android/jniLibs/<abi>/libmcpix_uniffi.so` (saída do build_android).
-    let aar_proj = root.join("bindings/kotlin");
+    let aar_proj = root.join("bindings/kotlin/aar");
     let dist_aar_libs = dist_dir().join("android/jniLibs");
     if !dist_aar_libs.exists() {
         return Err(format!(
@@ -314,7 +318,7 @@ fn package_aar(root: &Path) -> Result<(), String> {
     }
     // Variável que o build.gradle.kts do AAR usa para encontrar os .so.
     let status = Command::new("gradle")
-        .arg(":aar:assembleRelease")
+        .arg("assembleRelease")
         .arg("--no-daemon")
         .arg(format!("-Pjnilibs.dir={}", dist_aar_libs.display()))
         .current_dir(&aar_proj)
@@ -323,11 +327,16 @@ fn package_aar(root: &Path) -> Result<(), String> {
     if !status.success() {
         return Err(format!("gradle assembleRelease failed: {status}"));
     }
-    // Copia o AAR final para dist/.
-    let built = aar_proj.join("aar/build/outputs/aar/aar-release.aar");
-    if built.exists() {
-        copy_into(&built, &dist_dir().join("android"))?;
-    }
+    // Copia o AAR final para dist/. O nome do artefato segue o
+    // rootProject.name ("mcpix-aar"), então localizamos qualquer *.aar no
+    // diretório de saída em vez de fixar o nome.
+    let outputs = aar_proj.join("build/outputs/aar");
+    let aar_file = fs::read_dir(&outputs)
+        .map_err(|e| format!("read_dir {}: {e}", outputs.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .find(|p| p.extension().and_then(|s| s.to_str()) == Some("aar"))
+        .ok_or_else(|| format!("no .aar produced in {}", outputs.display()))?;
+    copy_into(&aar_file, &dist_dir().join("android"))?;
     Ok(())
 }
 
