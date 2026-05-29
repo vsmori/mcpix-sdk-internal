@@ -4,8 +4,12 @@
 #   - manualmente via UI (workflow_dispatch)
 #   - mensalmente para detectar bit-rot em deps Android Studio /
 #     Xcode antes que vire problema crítico
+#   - em PRs que tocam os samples mobile, os bindings que eles consomem,
+#     o xtask de build ou este workflow (filtro de `paths`). Mantém o
+#     custo contido — só roda quando há chance real de quebrar esses
+#     alvos, em vez de em cada commit.
 #
-# Não bloqueia PRs. Se quebrar, é sinal de upgrade necessário em
+# Se quebrar fora de um PR relevante, é sinal de upgrade necessário em
 # AGP/Kotlin/Xcode/Swift; abre issue.
 
 name: samples (mobile)
@@ -16,6 +20,20 @@ on:
     # 1º dia do mês 04:00 UTC. Time-of-month escolhido para minimizar
     # contenção com release.yml (que dispara em tags `v*` sob demanda).
     - cron: '0 4 1 * *'
+  pull_request:
+    paths:
+      # Samples cobertos por este workflow.
+      - 'examples/android-sample/**'
+      - 'examples/google-wallet-instant-app/**'
+      - 'examples/ios-sample/**'
+      # Bindings que os samples consomem (AAR Android + XCFramework iOS).
+      - 'bindings/kotlin/**'
+      - 'bindings/swift/**'
+      # Lógica de build/empacotamento desses alvos.
+      - 'xtask/src/**'
+      # O próprio workflow.
+      - '.github/workflows/samples-mobile.yml'
+      - '.github/scripts/ci-shell.sh'
 
 permissions:
   contents: read
