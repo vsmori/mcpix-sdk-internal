@@ -62,7 +62,7 @@ jobs:
       sha: ${{ steps.s.outputs.sha }}
       author_epoch: ${{ steps.s.outputs.epoch }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: s
         shell: bash
         run: |
@@ -89,7 +89,7 @@ jobs:
             label: B
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Pin no SHA capturado em `meta` — paranoid mas garante que
           # commits ao branch entre o disparo e o run das matrices

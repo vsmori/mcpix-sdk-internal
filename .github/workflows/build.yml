@@ -70,7 +70,7 @@ jobs:
     outputs:
       label: ${{ steps.label.outputs.label }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: label
         shell: bash
         run: |
@@ -95,7 +95,7 @@ jobs:
     if: inputs.target == 'all' || inputs.target == 'linux' || inputs.target == 'windows' || inputs.target == 'nuget'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
@@ -130,7 +130,7 @@ jobs:
     if: inputs.target == 'all' || inputs.target == 'android' || inputs.target == 'aar'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
@@ -164,7 +164,7 @@ jobs:
     if: inputs.target == 'all' || inputs.target == 'ios'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
@@ -192,7 +192,7 @@ jobs:
     if: inputs.target == 'all' || inputs.target == 'aar'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-java@v4
@@ -224,7 +224,7 @@ jobs:
     if: inputs.target == 'all' || inputs.target == 'nuget'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '8.0.x' }
