@@ -12,6 +12,11 @@ e o projeto adere a [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   generate → validate): Android (Activity + AAR), iOS (SwiftUI +
   XCFramework), Apple Wallet + App Clip, Google Wallet + Play Instant,
   .NET console (P/Invoke), Kotlin JVM CLI (JNA) e demo embarcado.
+- Sample bare-metal para o **Arduino UNO Q** (STM32U585, Cortex-M33,
+  ARMv8-M Main) em `embedded-uno-q/`, com README sob
+  `examples/arduino-uno-q-sample/` cobrindo o trade-off MCU-side vs
+  Linux-side (Qualcomm Dragonwing). `ci.yml` cross-compila para
+  `thumbv8m.main-none-eabihf` em cada PR.
 - `McpixReceiver.fromSealedBackup()` exposto via UniFFI (Swift + Kotlin)
   para o fluxo de restauração offline do App Clip / Instant App.
 - Workflow `samples-mobile.yml` (Android + iOS + Instant App), agora

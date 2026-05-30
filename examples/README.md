@@ -18,6 +18,7 @@ quando você porta para outro stack.
 | [`apple-wallet-appclip/`](apple-wallet-appclip/) | Apple Wallet Generic Pass + App Clip (geração offline + QR + NFC) | ⚠️ exige projeto Xcode (XcodeGen `project.yml` incluído) — não automatizável em CI |
 | [`google-wallet-instant-app/`](google-wallet-instant-app/) | Google Wallet GenericObject + Play Instant (geração offline + QR + NFC) | `samples-mobile.yml` (job `instant-app-sample`, manual + mensal) |
 | [`embedded-demo/`](embedded-demo/) | Cortex-M4F bare-metal (`no_std`) | `ci.yml` (cross-compile thumbv7em) |
+| [`arduino-uno-q-sample/`](arduino-uno-q-sample/) | Arduino UNO Q — STM32U585 (Cortex-M33) bare-metal (`no_std`) | `ci.yml` (cross-compile thumbv8m.main) |
 
 Por que os samples mobile estão num workflow separado: Android exige
 SDK + NDK (~5 min de setup) e iOS exige runner macOS (10× o custo
