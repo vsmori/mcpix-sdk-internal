@@ -329,7 +329,7 @@ jobs:
       # disponíveis como GHA build artifacts via upload-artifact abaixo.
       - name: github release
         if: needs.mode-gate.outputs.create_github_release == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           prerelease: ${{ needs.mode-gate.outputs.is_prerelease == 'true' }}
           files: |
