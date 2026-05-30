@@ -184,7 +184,7 @@ jobs:
         shell: bash
         run: install -m 755 .github/scripts/ci-shell.sh /tmp/ci-shell
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
