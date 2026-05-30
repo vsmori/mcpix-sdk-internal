@@ -11,6 +11,7 @@ SDK Rust de validação local de transações de pagamento. Pré-depósito PCT �
 
 > **Novo aqui?** Comece pelo [`QUICKSTART.md`](QUICKSTART.md) — 5 minutos até
 > ver código rodando. Para contribuir, [`CONTRIBUTING.md`](CONTRIBUTING.md).
+> Histórico de mudanças em [`CHANGELOG.md`](CHANGELOG.md).
 
 📚 **Documentação técnica completa**: ver [`docs/`](./docs/) — arquitetura,
 protocolo, modelo de ameaças, especificação criptográfica, mapeamento das

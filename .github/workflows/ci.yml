@@ -108,10 +108,13 @@ jobs:
 
       - name: install bare-metal targets
         run: |
-          rustup target add thumbv7em-none-eabihf riscv32imc-unknown-none-elf
+          rustup target add thumbv7em-none-eabihf thumbv8m.main-none-eabihf riscv32imc-unknown-none-elf
 
       - name: build mcpix-embed for Cortex-M4F (no_std, no alloc)
         run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target thumbv7em-none-eabihf --release
+
+      - name: build mcpix-embed for Cortex-M33 / ARMv8-M (STM32U585, Arduino UNO Q)
+        run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target thumbv8m.main-none-eabihf --release
 
       - name: build mcpix-embed for RISC-V (ESP32-C3 class)
         run: cargo build -p mcpix-embed --no-default-features --features qr,storage --target riscv32imc-unknown-none-elf --release
@@ -121,6 +124,11 @@ jobs:
           sudo apt-get install -y binutils-arm-none-eabi
           cd embedded && cargo build --release
           arm-none-eabi-size target/thumbv7em-none-eabihf/release/mcpix-embed-demo
+
+      - name: build Arduino UNO Q demo binary (STM32U585, Cortex-M33) + measure size
+        run: |
+          cd embedded-uno-q && cargo build --release
+          arm-none-eabi-size target/thumbv8m.main-none-eabihf/release/mcpix-uno-q-demo
 
       - name: integration test against built artifact (hash only)
         # Os dois primeiros tests do integrity_against_dist exigem só dist/

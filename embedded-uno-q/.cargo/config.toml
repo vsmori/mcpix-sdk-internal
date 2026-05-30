@@ -1,0 +1,10 @@
+# Target padrão deste projeto. `cargo build` daqui já cross-compila para
+# o STM32U585 (Cortex-M33, ARMv8-M Main) — o MCU do Arduino UNO Q.
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+# Linker script do cortex-m-rt. memory.x define o layout flash/RAM do U585.
+[target.thumbv8m.main-none-eabihf]
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]

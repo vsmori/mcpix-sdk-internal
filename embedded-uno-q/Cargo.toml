@@ -1,0 +1,35 @@
+[package]
+name = "mcpix-embed-uno-q"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Sample bare-metal para o MCU do Arduino UNO Q (STM32U585, Cortex-M33).
+# Isolado do workspace principal — usa toolchain Cortex-M com cortex-m-rt
+# e linker script próprio. Build:
+#   cd embedded-uno-q && cargo build --release --target thumbv8m.main-none-eabihf
+#
+# A UNO Q é dual-arquitetura (STM32U585 + Qualcomm Dragonwing rodando
+# Debian). Este crate cobre o **lado MCU** — o caminho com menor
+# superfície de ataque, sem SO abaixo do crypto. Para o lado Linux,
+# `mcpix-receiver-sdk` roda direto como qualquer ARM64 Debian.
+
+[[bin]]
+name = "mcpix-uno-q-demo"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+mcpix-embed = { path = "../crates/mcpix-embed", default-features = false, features = ["qr", "storage"] }
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1"
+
+[profile.release]
+opt-level = "z"   # Otimizar para tamanho — métrica que importa em MCU.
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = true
+panic = "abort"

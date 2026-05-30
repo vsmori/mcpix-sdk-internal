@@ -22,7 +22,10 @@ members = [
 # `embedded/` é excluído porque vive em target cross-compile bare-metal
 # (thumbv7em-none-eabihf) com cortex-m-rt + linker script próprio. Não
 # resolve no host. Build via `cd embedded && cargo build`.
-exclude = ["fuzz", "embedded"]
+#
+# `embedded-uno-q/` mesma razão: bare-metal Cortex-M33 do STM32U585
+# (Arduino UNO Q), target thumbv8m.main-none-eabihf.
+exclude = ["fuzz", "embedded", "embedded-uno-q"]
 
 [workspace.package]
 version = "0.1.0"
