@@ -405,7 +405,7 @@ jobs:
       id-token: write   # OIDC para Sigstore (sem secrets persistentes).
       contents: write   # Anexa o .intoto.jsonl ao GitHub Release.
       actions: read     # Leitura de metadata do workflow para o predicate.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.package.outputs.artifacts-base64-subjects }}
       provenance-name: mcpix-sdk.intoto.jsonl
