@@ -61,7 +61,7 @@ jobs:
     name: Android sample (Activity + AAR)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Instala o wrapper de captura de log num caminho absoluto antes
       # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
       # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
@@ -128,7 +128,7 @@ jobs:
     name: Google Play Instant sample (Android)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Instala o wrapper de captura de log num caminho absoluto antes
       # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
       # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
@@ -192,7 +192,7 @@ jobs:
     name: iOS sample (SwiftUI + XCFramework)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Instala o wrapper de captura de log num caminho absoluto antes
       # do primeiro step `run:`. `shell: bash` ignora o defaults.run.shell
       # (que aponta para /tmp/ci-shell, ainda inexistente aqui).
