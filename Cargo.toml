@@ -53,7 +53,7 @@ parking_lot = "0.12"
 rusqlite = { version = "0.31", features = ["bundled"] }
 data-encoding = "2.5"
 cbindgen = { version = "0.27", default-features = false }
-uniffi = { version = "0.28", features = ["cli"] }
+uniffi = { version = "0.31", features = ["cli"] }
 uniffi_build = { version = "0.28" }
 ed25519-dalek = { version = "2.1", default-features = false, features = ["std"] }
 proptest = "1.5"
