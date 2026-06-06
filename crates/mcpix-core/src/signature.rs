@@ -17,8 +17,43 @@
 //! no controle de versão).
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH};
+use subtle::ConstantTimeEq;
 
 use crate::error::McpixError;
+
+/// Comparação ASCII case-insensitive em tempo constante. Existe porque
+/// `str::eq_ignore_ascii_case` faz curto-circuito no primeiro byte
+/// divergente. Os operandos aqui (hashes hex pós-verificação de
+/// assinatura) já são públicos — esta função é defesa em profundidade:
+/// mantém a regra monolítica "todo array de bytes comparado no core é
+/// constant-time", facilitando auditoria por `grep`.
+///
+/// Implementação: normaliza cada byte para lowercase via aritmética
+/// branchless (`b | 0x20` quando está na faixa `[A-Z]`), acumula XOR e
+/// delega o teste final a `ct_eq`.
+fn ascii_ci_eq_ct(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    // Lowercase branchless: para qualquer byte ASCII na faixa [A-Z]
+    // (0x41..=0x5A) somar 0x20 dá [a-z]. Para outros bytes a operação
+    // deixa o byte intacto se já estiver em [a-z] ou na faixa de
+    // dígitos — caso típico de um hash hex (`[0-9a-fA-F]`).
+    fn lower(byte: u8) -> u8 {
+        let is_upper = ((byte.wrapping_sub(b'A')) < 26) as u8;
+        byte | (is_upper * 0x20)
+    }
+    // Não dá para alocar `Vec` em `no_std`; comparamos via fold sem
+    // materializar buffer intermediário. Para entradas pequenas (64
+    // chars de hex SHA-256) isso é trivial.
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= lower(*x) ^ lower(*y);
+    }
+    // Delega o teste final a `ct_eq` (em vez de `diff == 0`) para que o
+    // próprio comparação-com-zero também seja constant-time.
+    diff.ct_eq(&0u8).into()
+}
 
 /// Tamanho fixo da chave pública Ed25519: 32 bytes raw.
 pub const RELEASE_PUBKEY_LEN: usize = PUBLIC_KEY_LENGTH;
@@ -107,7 +142,10 @@ pub fn verify_combined(
             continue;
         };
         if path.ends_with(expected_filename) {
-            return if hash.eq_ignore_ascii_case(actual_hash_hex) {
+            // Comparação em tempo constante (ver `ascii_ci_eq_ct`). Os
+            // operandos são hashes hex já públicos pós verify_signature
+            // — o uso aqui é defesa em profundidade.
+            return if ascii_ci_eq_ct(hash.as_bytes(), actual_hash_hex.as_bytes()) {
                 Ok(SignatureCheck::Verified)
             } else {
                 Ok(SignatureCheck::Tampered {
@@ -239,6 +277,40 @@ mod tests {
             }
             other => panic!("expected Tampered, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn ascii_ci_eq_ct_matches_case_insensitive_equality() {
+        // Mesma semântica que `eq_ignore_ascii_case` para entradas hex,
+        // mas constant-time.
+        assert!(ascii_ci_eq_ct(b"deadBEEF", b"DEADbeef"));
+        assert!(ascii_ci_eq_ct(b"", b""));
+        assert!(!ascii_ci_eq_ct(b"deadbeef", b"deadbeed"));
+        assert!(!ascii_ci_eq_ct(b"deadbeef", b"deadbee")); // tamanho ≠
+    }
+
+    #[test]
+    fn ascii_ci_eq_ct_combined_path_still_verifies() {
+        // Cross-check: verify_combined ainda aceita match após a troca da
+        // comparação por constant-time.
+        let (sk, pk) = fresh_keypair();
+        let hash_lower = "aa".repeat(32);
+        let hash_upper = hash_lower.to_ascii_uppercase();
+        let sums = format!("{hash_lower}  libmcpix_uniffi.so\n");
+        let sig = sk.sign(sums.as_bytes()).to_bytes();
+        // O hash atual computado pelo runtime pode chegar em maiúsculas;
+        // a verificação deve continuar passando.
+        assert_eq!(
+            verify_combined(
+                sums.as_bytes(),
+                &sig,
+                &pk,
+                "libmcpix_uniffi.so",
+                &hash_upper
+            )
+            .unwrap(),
+            SignatureCheck::Verified
+        );
     }
 
     #[test]
