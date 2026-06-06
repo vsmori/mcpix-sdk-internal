@@ -33,6 +33,13 @@ e o projeto adere a [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   é marcado como pre-release, e se publica em Maven/NuGet. Dry-run via
   `workflow_dispatch` com `dry_run=true` permite ensaiar todo o pipeline
   (build + sign + SHA256SUMS + provenance) sem publicar.
+- `integrity::verify_bytes` e `signature::verify_combined` agora usam
+  comparação em tempo constante (`subtle::ConstantTimeEq` e helper
+  branchless `ascii_ci_eq_ct`) nos seus dois sites de comparação de
+  byte-array — operandos públicos pós-autenticação criptográfica,
+  então o ganho é defesa em profundidade, não correção de
+  vulnerabilidade. Regra monolítica: nenhum `==` sobrevive em
+  comparações de byte-array no `mcpix-core`.
 
 ### Fixed
 - `samples-mobile.yml`: build do Android sample e do Instant App

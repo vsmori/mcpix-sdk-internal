@@ -21,6 +21,7 @@
 //! de `Tampered`. O CI sempre roda com a variável presente.
 
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use crate::error::McpixError;
 
@@ -75,7 +76,11 @@ pub fn verify_bytes(
         expected[i] = u8::from_str_radix(s, 16).map_err(|e| McpixError::Storage(e.to_string()))?;
     }
     let actual = sha256(actual_bytes);
-    if expected == actual {
+    // Comparação em tempo constante por consistência com `verify_c2` — ambos
+    // os operandos aqui são hashes públicos, então timing não é
+    // explorável em si, mas manter a regra monolítica "todo byte-array
+    // comparado no core usa `ct_eq`" simplifica auditoria externa.
+    if expected.ct_eq(&actual).into() {
         Ok(IntegrityCheck::Verified)
     } else {
         Ok(IntegrityCheck::Tampered { expected, actual })
